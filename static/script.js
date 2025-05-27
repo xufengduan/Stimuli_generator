@@ -167,11 +167,7 @@ function initializeSocket() {
         // Add additional options to improve stability
         upgrade: true,                         // Allow transport upgrade
         rememberUpgrade: true,                 // Remember transport upgrade
-        rejectUnauthorized: false,             // Accept self-signed certificates
-        withCredentials: false,                // Don't send cookies with requests
-        extraHeaders: {                        // Add extra headers
-            "Cache-Control": "no-cache"
-        }
+        rejectUnauthorized: false              // Accept self-signed certificates
     };
     
     console.log(`Connecting to Socket.IO: ${currentUrl}, Session ID: ${sessionId}`);
