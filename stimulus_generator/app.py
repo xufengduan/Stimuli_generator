@@ -13,7 +13,7 @@ from flask_socketio import SocketIO, emit
 import time
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static'))
 CORS(app)
 socketio = SocketIO(
     app,
