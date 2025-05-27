@@ -26,8 +26,11 @@ socketio = SocketIO(
     http_compression=False,
     manage_session=False,
     always_connect=False,  # changed to False to prevent reconnection issues
-    max_http_buffer_size=1024 * 1024,  # reduce buffer size to 1MB to prevent issues
-    # Remove client-side reconnection options as they should be handled on client side
+    max_http_buffer_size=1 * 1024 * 1024,  # reduce buffer size to 1MB for stability
+    # Remove client-side configuration from server
+    transports=['websocket', 'polling'],  # specify allowed transports
+    allow_upgrades=True,  # allow transport upgrades
+    cookie=None  # disable cookies for simpler connection handling
 )
 
 # Create a session store directory
@@ -651,35 +654,80 @@ def handle_connect():
         
         # If session_id is provided, handle room joining with proper error handling
         if session_id:
-            # Use a simpler approach to avoid race conditions
-            def safe_room_join():
+            # Defer room joining to avoid potential race conditions
+            # This helps prevent the "write() before start_response" error
+            def join_room_task():
                 try:
-                    # Small delay to ensure connection is stable
+                    # Wait longer to ensure connection is fully established
                     socketio.sleep(0.5)
                     
-                    # Join the room safely
-                    from flask_socketio import join_room
-                    join_room(session_id, sid=client_sid, namespace='/')
-                    print(f'Client {client_sid} joined room {session_id}')
+                    # Check if the connection is still valid before proceeding
+                    if not hasattr(socketio.server.manager, 'get_session') or \
+                       not socketio.server.manager.get_session(client_sid, namespace='/'):
+                        print(f"Client {client_sid} connection no longer valid, skipping room join")
+                        return
                     
-                    # Send confirmation after a delay
-                    socketio.sleep(0.2)
+                    # Join the room
                     try:
-                        socketio.emit('server_status', {
+                        socketio.server.enter_room(client_sid, session_id, namespace='/')
+                        print(f'Client {client_sid} joined room {session_id}')
+                        
+                        # Prepare status data
+                        status_data = {
                             'status': 'connected', 
-                            'message': f'Connected to session {session_id}',
+                            'message': f'Connection established and joined room {session_id}',
                             'room_joined': True,
                             'session_id': session_id
-                        }, room=session_id, namespace='/')
-                        print(f'Sent confirmation to room {session_id}')
-                    except Exception as emit_error:
-                        print(f"Error sending confirmation: {emit_error}")
+                        }
                         
-                except Exception as e:
-                    print(f"Error in room joining: {e}")
+                        # Wait a bit more before sending confirmation
+                        socketio.sleep(0.2)
+                        
+                        # Try to send confirmation to room with retry
+                        for attempt in range(3):
+                            try:
+                                socketio.emit('server_status', status_data, room=session_id, namespace='/')
+                                print(f'Sent confirmation to room {session_id}')
+                                break
+                            except Exception as emit_error:
+                                print(f"Room emit error (attempt {attempt + 1}): {emit_error}")
+                                if attempt == 2:  # Last attempt
+                                    # Fall back to direct client message
+                                    try:
+                                        socketio.emit('server_status', status_data, room=client_sid, namespace='/')
+                                    except:
+                                        pass  # Silently handle final fallback failure
+                                else:
+                                    socketio.sleep(0.1)  # Wait before retry
+                    except Exception as room_error:
+                        print(f"Room joining error: {room_error}")
+                        # Only try to send message if connection is still valid
+                        try:
+                            if hasattr(socketio.server.manager, 'get_session') and \
+                               socketio.server.manager.get_session(client_sid, namespace='/'):
+                                socketio.emit('server_status', {
+                                    'status': 'connected', 
+                                    'message': 'Connection established but room joining failed',
+                                    'room_joined': False,
+                                    'session_id': session_id
+                                }, room=client_sid, namespace='/')
+                        except:
+                            pass  # Silently handle failure
+                except Exception as task_error:
+                    print(f"Room joining task error: {task_error}")
             
-            # Start room joining as a background task  
-            socketio.start_background_task(safe_room_join)
+            # Start room joining as a background task
+            try:
+                socketio.start_background_task(join_room_task)
+            except Exception as bg_task_error:
+                print(f"Failed to start background task: {bg_task_error}")
+                # Fallback: try immediate room join with extra delay
+                socketio.sleep(0.8)
+                try:
+                    socketio.server.enter_room(client_sid, session_id, namespace='/')
+                    print(f'Client {client_sid} joined room {session_id} (fallback)')
+                except:
+                    pass
             
             # Return immediately to complete the connection handshake
             return
@@ -719,7 +767,7 @@ def handle_connect():
 
 
 @socketio.on('disconnect')
-def handle_disconnect(*args, **kwargs):
+def handle_disconnect(reason=None):
     """
     Handle WebSocket disconnection event
     This function is called when a client disconnects from the WebSocket server
@@ -727,7 +775,7 @@ def handle_disconnect(*args, **kwargs):
     try:
         # Get client SID safely
         client_sid = request.sid if request and hasattr(request, 'sid') else "unknown"
-        print(f'Client disconnected: {client_sid}')
+        print(f'Client disconnected: {client_sid}, reason: {reason}')
         
         # No need to explicitly leave rooms - Socket.IO does this automatically
         # But we can add additional cleanup if needed in the future
@@ -739,7 +787,7 @@ def handle_disconnect(*args, **kwargs):
     return
 
 @socketio.on('ping')
-def handle_ping(data=None, *args, **kwargs):
+def handle_ping(data):
     """
     Handle ping messages from clients to keep connections alive
     """
@@ -760,7 +808,7 @@ def handle_ping(data=None, *args, **kwargs):
         # Send pong response directly to the client
         try:
             response = {
-                'time': data.get('time', 0) if data and isinstance(data, dict) else 0,
+                'time': data.get('time', 0) if data else 0,
                 'server_time': time.time(),
                 'session_id': session_id
             }
@@ -885,27 +933,21 @@ def huggingface_inference():
         return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
 
-# Add comprehensive error handlers for Socket.IO
+# Add error handlers for Socket.IO
 @socketio.on_error()
-def handle_socketio_error(e):
+def handle_error(e):
     """
     Global error handler for all Socket.IO events
     This function is called when an error occurs during Socket.IO event handling
     """
     try:
         print(f"Socket.IO error: {str(e)}")
-        # Get client SID safely for logging
-        try:
-            client_sid = request.sid if request and hasattr(request, 'sid') else "unknown"
-            print(f"Error occurred for client: {client_sid}")
-        except:
-            pass
-    except Exception as handler_error:
-        print(f"Error in error handler: {handler_error}")
-    # Never try to send messages from error handlers as it can cause more errors
+        # Don't try to send error messages here, as it might cause another error
+    except:
+        pass  # Ensure error handler itself doesn't raise exceptions
 
 @socketio.on_error_default
-def handle_default_socketio_error(e):
+def handle_default_error(e):
     """
     Default error handler for Socket.IO events
     This function is called when an error occurs during Socket.IO event handling
@@ -913,31 +955,9 @@ def handle_default_socketio_error(e):
     """
     try:
         print(f"Socket.IO default error: {str(e)}")
-        print(f"Error type: {type(e).__name__}")
-    except Exception as handler_error:
-        print(f"Error in default error handler: {handler_error}")
-    # Never try to send messages from error handlers
-
-# Add a catch-all exception handler for the entire application
-@app.errorhandler(Exception)
-def handle_app_exception(e):
-    """
-    Global exception handler for the Flask application
-    """
-    try:
-        print(f"Application error: {str(e)}")
-        print(f"Error type: {type(e).__name__}")
-        # Only return JSON for AJAX requests
-        if request.path.startswith('/socket.io'):
-            # For Socket.IO related errors, return a minimal response
-            return '', 500
-        elif request.is_json or 'application/json' in request.headers.get('Accept', ''):
-            return jsonify({'error': 'Internal server error'}), 500
-        else:
-            return 'Internal server error', 500
-    except Exception as handler_error:
-        print(f"Error in exception handler: {handler_error}")
-        return '', 500
+        # Don't try to send error messages here, as it might cause another error
+    except:
+        pass  # Ensure error handler itself doesn't raise exceptions
 
 # Clean up expired sessions at startup
 cleanup_sessions()
