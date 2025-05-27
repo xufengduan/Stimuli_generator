@@ -111,9 +111,9 @@ function initializeSocket() {
         console.log("WebSocket connection attempt already in progress, skipping");
         return;
     }
-    
+
     socketConnectionInProgress = true;
-    
+
     // If Socket exists, try to close the old connection
     if (socket) {
         try {
@@ -128,7 +128,7 @@ function initializeSocket() {
             socket.off('stimulus_update');
             socket.off('server_status');
             socket.off('error');
-            
+
             // If connected, disconnect first
             if (socket.connected) {
                 console.log("Closing existing WebSocket connection...");
@@ -138,19 +138,19 @@ function initializeSocket() {
             console.error("Error closing old WebSocket connection:", e);
         }
     }
-    
+
     // Clear all existing reconnection timers
     if (socketReconnectTimer) {
         clearTimeout(socketReconnectTimer);
         socketReconnectTimer = null;
     }
-    
+
     socketInitialized = false; // Reset initialization flag
-    
+
     // Get current page URL and protocol
     const currentUrl = window.location.origin;
     const isSecure = window.location.protocol === 'https:';
-    
+
     // Create configuration object, add query parameters including session ID
     const socketOptions = {
         path: '/socket.io',
@@ -165,13 +165,13 @@ function initializeSocket() {
         upgrade: true,                         // Allow transport upgrade
         rememberUpgrade: false,                // Don't remember upgrade to avoid issues
     };
-    
+
     console.log(`Connecting to Socket.IO: ${currentUrl}, Session ID: ${sessionId}`);
-    
+
     try {
         // Create Socket.IO connection with error handling
         socket = io(currentUrl, socketOptions);
-        
+
         // Add a timeout to detect connection issues
         const connectionTimeout = setTimeout(() => {
             if (!socket.connected) {
@@ -181,18 +181,18 @@ function initializeSocket() {
                 handleReconnect();
             }
         }, 10000);
-        
+
         // Connection event handling
         socket.on('connect', () => {
             // Clear connection timeout
             clearTimeout(connectionTimeout);
-            
+
             console.log('WebSocket connection successful!', socket.id);
             socketInitialized = true; // Set initialization complete flag
             socketReconnectAttempts = 0; // Reset reconnection counter
             socketBackoffDelay = 1000; // Reset backoff delay
             socketConnectionInProgress = false; // Reset connection in progress flag
-            
+
             // Join session room after connection is established
             setTimeout(() => {
                 try {
@@ -202,7 +202,7 @@ function initializeSocket() {
                     console.warn("Failed to send join_session:", e);
                 }
             }, 100);
-            
+
             // Add ping to verify connection is working
             setTimeout(() => {
                 try {
@@ -212,81 +212,81 @@ function initializeSocket() {
                 }
             }, 1000);
         });
-        
+
         socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
             socketInitialized = false; // Reset flag on connection error
             socketConnectionInProgress = false; // Reset connection in progress flag
-            
+
             // Use exponential backoff strategy for reconnection
             handleReconnect();
         });
-        
+
         socket.on('error', (error) => {
             console.error('WebSocket error:', error);
             socketConnectionInProgress = false; // Reset connection in progress flag
         });
-        
+
         socket.on('disconnect', (reason) => {
             console.log(`WebSocket disconnected: ${reason}`);
             socketInitialized = false; // Reset flag on disconnection
             socketConnectionInProgress = false; // Reset connection in progress flag
-            
+
             // If disconnection reason is not client-initiated, try to reconnect
             if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
                 // Use exponential backoff strategy for reconnection
                 handleReconnect();
             }
         });
-        
+
         socket.on('reconnect_attempt', (attemptNumber) => {
             console.log(`Attempting reconnection (${attemptNumber})...`);
             socketReconnectAttempts = attemptNumber;
         });
-        
+
         socket.on('reconnect', (attemptNumber) => {
             console.log(`Reconnection successful, attempts: ${attemptNumber}`);
             socketInitialized = true; // Restore flag on successful reconnection
             socketReconnectAttempts = 0; // Reset reconnection counter
             socketBackoffDelay = 1000; // Reset backoff delay
         });
-        
+
         socket.on('reconnect_failed', () => {
             console.error('WebSocket reconnection failed after maximum attempts');
             socketInitialized = false; // Reset flag on reconnection failure
             socketConnectionInProgress = false; // Reset connection in progress flag
-            
+
             // Use our own reconnection strategy
             handleReconnect();
         });
 
-    // Listen for progress_update event, update progress bar
-    socket.on('progress_update', (data) => {
+        // Listen for progress_update event, update progress bar
+        socket.on('progress_update', (data) => {
             console.log('Received progress update:', data);
-        if (data.session_id === sessionId) {
-            updateProgress(data.progress);
-        }
-    });
+            if (data.session_id === sessionId) {
+                updateProgress(data.progress);
+            }
+        });
 
-    // Listen for stimulus_update event, update logs
-    socket.on('stimulus_update', (data) => {
+        // Listen for stimulus_update event, update logs
+        socket.on('stimulus_update', (data) => {
             console.log('Received stimulus update:', data);
-        if (data.session_id === sessionId) {
-            handleLogMessage(data.type, data.message);
-        }
-    });
-        
+            if (data.session_id === sessionId) {
+                handleLogMessage(data.type, data.message);
+            }
+        });
+
         // Listen for server_status event
         socket.on('server_status', (data) => {
             console.log('Received server status:', data);
             // Handle server status messages
         });
-        
+
         // Add ping/pong handler for connection monitoring
         socket.on('pong', (data) => {
             const roundTripTime = Date.now() - (data.time || 0);
             console.log(`Received pong response, round-trip time: ${roundTripTime}ms`);
-            
+
             // Schedule next ping to keep connection alive
             setTimeout(() => {
                 if (socket && socket.connected) {
@@ -298,11 +298,11 @@ function initializeSocket() {
                 }
             }, 30000); // Send ping every 30 seconds
         });
-        
+
     } catch (e) {
         console.error("Error creating WebSocket connection:", e);
         socketConnectionInProgress = false; // Reset connection in progress flag
-        
+
         // Use exponential backoff strategy for reconnection
         handleReconnect();
     }
@@ -315,10 +315,10 @@ function handleReconnect() {
         clearTimeout(socketReconnectTimer);
         socketReconnectTimer = null;
     }
-    
+
     // Increment reconnection attempts counter
     socketReconnectAttempts++;
-    
+
     // Check if we've reached the maximum number of attempts
     if (socketReconnectAttempts > maxReconnectAttempts) {
         console.error(`Maximum reconnection attempts (${maxReconnectAttempts}) reached, stopping`);
@@ -328,22 +328,22 @@ function handleReconnect() {
         appendLogMessage(scorerLog, "WebSocket connection lost. Please refresh the page.", "error");
         return;
     }
-    
+
     // Calculate exponential backoff delay with jitter
     // Add random jitter (±20%) to prevent reconnection storms
     const jitterFactor = 0.8 + (Math.random() * 0.4); // Random value between 0.8 and 1.2
     const baseDelay = socketBackoffDelay * Math.pow(1.5, socketReconnectAttempts - 1);
     const delay = Math.min(baseDelay * jitterFactor, maxBackoffDelay);
-    
+
     console.log(`Scheduling reconnection attempt ${socketReconnectAttempts} in ${Math.round(delay)}ms`);
-    
+
     // Set a timer for the next reconnection attempt
     socketReconnectTimer = setTimeout(() => {
         console.log(`Executing reconnection attempt ${socketReconnectAttempts}`);
-        
+
         // Reset connection flag to allow a new connection attempt
         socketConnectionInProgress = false;
-        
+
         // Try to reconnect
         try {
             // For later reconnection attempts, try to recreate the socket from scratch
@@ -357,7 +357,7 @@ function handleReconnect() {
                     console.warn("Error during socket cleanup:", e);
                 }
             }
-            
+
             // Initialize a new socket connection
             initializeSocket();
         } catch (e) {
@@ -374,10 +374,10 @@ function checkSocketConnection() {
     if (!socket || !socket.connected) {
         console.log("WebSocket not connected, reinitializing...");
         socketInitialized = false;
-        
+
         // Only initialize if no connection attempt is in progress
         if (!socketConnectionInProgress) {
-        initializeSocket();
+            initializeSocket();
         }
         return false;
     }
@@ -392,30 +392,30 @@ function ensureSocketConnection(callback, maxWaitTime = 5000) {
         callback();
         return;
     }
-    
+
     console.log("WebSocket not connected, attempting reconnection...");
-    
+
     // Reset retry counters
     socketReconnectAttempts = 0;
     socketBackoffDelay = 1000;
-    
+
     // Set retry counter
     let retryCount = 0;
     const maxRetries = 3;
-    
+
     // Create retry function
     function attemptConnection() {
         retryCount++;
         console.log(`Connection attempt ${retryCount}/${maxRetries}...`);
-        
+
         // Reinitialize WebSocket connection
         socketConnectionInProgress = false; // Ensure new connection can be made
         initializeSocket();
-        
+
         // Wait for connection establishment timeout
         const timeoutId = setTimeout(() => {
             console.warn(`WebSocket connection timeout (attempt ${retryCount}/${maxRetries})`);
-            
+
             // If there are remaining retries, continue attempting
             if (retryCount < maxRetries) {
                 attemptConnection();
@@ -425,36 +425,36 @@ function ensureSocketConnection(callback, maxWaitTime = 5000) {
                 callback();
             }
         }, maxWaitTime);
-        
+
         // Listen for successful connection event
         socket.once('connect', () => {
             clearTimeout(timeoutId); // Clear timeout timer
             console.log("WebSocket connection successful");
-            
+
             // Wait for server_status confirmation to ensure room join success
             const roomConfirmTimeoutId = setTimeout(() => {
                 console.warn("No room confirmation received, continuing operation");
                 // Brief delay to ensure event listeners are registered
                 setTimeout(callback, 200);
             }, 1000);
-            
+
             // Add one-time listener for server_status message
             socket.once('server_status', (data) => {
                 clearTimeout(roomConfirmTimeoutId);
                 console.log("Received server status confirmation:", data);
-                
+
                 if (data.room_joined) {
                     console.log("Successfully joined room:", data.session_id);
                 } else {
                     console.warn("Failed to join room or no room information provided");
                 }
-                
+
                 // Brief delay to ensure event listeners are registered
                 setTimeout(callback, 200);
             });
         });
     }
-    
+
     // Start first connection attempt
     attemptConnection();
 }
@@ -497,7 +497,7 @@ function appendLogMessage(logElement, message, className = '') {
     // Create message container
     const logMessage = document.createElement('div');
     logMessage.className = `log-message ${className}`;
-    
+
     // Format message
     if (message.includes('=== No.')) {
         // Use special style for round information
@@ -508,7 +508,7 @@ function appendLogMessage(logElement, message, className = '') {
             const parts = message.split('Output:');
             const prefix = parts[0];
             const jsonText = parts[1].trim();
-            
+
             // Try to format JSON
             if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
                 const formattedJson = formatJson(jsonText);
@@ -529,10 +529,10 @@ function appendLogMessage(logElement, message, className = '') {
         // General message
         logMessage.innerHTML = `<span class="message-output">${message}</span>`;
     }
-    
+
     // Add to log panel
     logElement.appendChild(logMessage);
-    
+
     // Scroll to bottom
     logElement.scrollTop = logElement.scrollHeight;
 }
@@ -552,7 +552,7 @@ function syntaxHighlight(json) {
     if (typeof json != 'string') {
         json = JSON.stringify(json, undefined, 2);
     }
-    
+
     json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
         let cls = 'json-number';
@@ -587,7 +587,7 @@ function getApiUrl(endpoint) {
 function initializePage() {
     // Ensure Stop button is disabled by default
     stopButton.disabled = true;
-    
+
     // Ensure all other buttons and input elements are enabled
     generateButton.disabled = false;
     clearButton.disabled = false;
@@ -595,22 +595,22 @@ function initializePage() {
     deleteAgent2Button.disabled = false;
     addAgent3Button.disabled = false;
     deleteAgent3Button.disabled = false;
-    
+
     // Determine API key input availability based on default model selection
     handleModelChange();
-    
+
     // Ensure progress bar is at 0%
     updateProgress(0);
-    
+
     // Initialize WebSocket connection
     initializeSocket();
-    
+
     // Start periodic connection check
     periodicSocketCheck();
-    
+
     // Set up UI protection mechanism
     setupUIProtection();
-    
+
     // Display session ID in console for debugging
     console.log(`Initialized page with session ID: ${sessionId}`);
 }
@@ -618,7 +618,7 @@ function initializePage() {
 // Handle model switching function
 function handleModelChange() {
     const selectedModel = modelChoice.value;
-    
+
     // If GPT-4o is selected, enable API Key input box
     if (selectedModel === 'GPT-4o') {
         apiKeyInput.disabled = false;
@@ -656,7 +656,7 @@ function validateAutoGenerateInputs() {
         alert('Please select a model!');
         return false;
     }
-    
+
     // If GPT-4o is selected, check API Key
     if (selectedModel === 'GPT-4o' && !apiKey) {
         alert('OpenAI API Key cannot be empty when using GPT-4o!');
@@ -680,28 +680,28 @@ function validateAutoGenerateInputs() {
     for (let i = 0; i < itemContainers.length; i++) {
         const tbody = itemContainers[i].querySelector('.stimuli-table tbody');
         const rows = tbody.getElementsByTagName('tr');
-        
+
         if (rows.length === 0) {
-            alert(`No component rows in Example Item ${i+1}!`);
+            alert(`No component rows in Example Item ${i + 1}!`);
             return false;
         }
-        
+
         for (let j = 0; j < rows.length; j++) {
             const typeCell = rows[j].querySelector('.type-column input');
             const contentCell = rows[j].querySelector('.content-column input');
-            
+
             if (typeCell && contentCell) {
                 const typeValue = typeCell.value.trim();
                 const contentValue = contentCell.value.trim();
-                
+
                 if (!typeValue || !contentValue) {
-                    alert(`All "Components" and "Content" fields in Item ${i+1} must be filled!`);
+                    alert(`All "Components" and "Content" fields in Item ${i + 1} must be filled!`);
                     return false;
                 }
             }
         }
     }
-    
+
     return true;
 }
 
@@ -709,32 +709,32 @@ function validateAutoGenerateInputs() {
 function collectExampleStimuli() {
     const stimuli = [];
     const itemContainers = document.querySelectorAll('.item-container');
-    
+
     itemContainers.forEach((itemContainer, index) => {
         const tbody = itemContainer.querySelector('.stimuli-table tbody');
         const rows = tbody.getElementsByTagName('tr');
         const itemData = {};
-        
+
         for (let i = 0; i < rows.length; i++) {
             const typeCell = rows[i].querySelector('.type-column input');
             const contentCell = rows[i].querySelector('.content-column input');
-            
+
             if (typeCell && contentCell) {
                 const type = typeCell.value.trim();
                 const content = contentCell.value.trim();
-                
+
                 if (type && content) {
                     itemData[type] = content;
                 }
             }
         }
-        
+
         // Only add to stimuli array when itemData is not empty
         if (Object.keys(itemData).length > 0) {
             stimuli.push(itemData);
         }
     });
-    
+
     return stimuli;
 }
 
@@ -742,8 +742,8 @@ function collectExampleStimuli() {
 function addComponentToAllItems() {
     const tables = document.querySelectorAll('.stimuli-table tbody');
     tables.forEach(tbody => {
-    const newRow = document.createElement('tr');
-    newRow.innerHTML = `
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
             <td class="type-column"><input type="text" placeholder="Enter new component"></td>
             <td class="content-column"><input type="text" placeholder="Enter component's content"></td>
         `;
@@ -756,7 +756,7 @@ function deleteComponentFromAllItems() {
     const tables = document.querySelectorAll('.stimuli-table tbody');
     tables.forEach(tbody => {
         const rows = tbody.getElementsByTagName('tr');
-    if (rows.length > 1) { // Ensure at least one row is kept
+        if (rows.length > 1) { // Ensure at least one row is kept
             tbody.removeChild(rows[rows.length - 1]);
         }
     });
@@ -770,26 +770,26 @@ function addNewItem() {
     const lastItemId = lastItem.id;
     const lastItemNumber = parseInt(lastItemId.split('-')[1]);
     const newItemNumber = lastItemNumber + 1;
-    
+
     // Get current table row count
     const lastItemTable = lastItem.querySelector('.stimuli-table tbody');
     const rowCount = lastItemTable.rows.length;
-    
+
     // Create new Item container
     const newItem = document.createElement('div');
     newItem.className = 'item-container';
     newItem.id = `item-${newItemNumber}`;
-    
+
     // Create Item title
     const itemTitle = document.createElement('div');
     itemTitle.className = 'item-title';
     itemTitle.textContent = `Item ${newItemNumber}`;
     newItem.appendChild(itemTitle);
-    
+
     // Create table
     const table = document.createElement('table');
     table.className = 'stimuli-table';
-    
+
     // Add table header
     const thead = document.createElement('thead');
     thead.innerHTML = `
@@ -799,7 +799,7 @@ function addNewItem() {
         </tr>
     `;
     table.appendChild(thead);
-    
+
     // Add table content
     const tbody = document.createElement('tbody');
     for (let i = 0; i < rowCount; i++) {
@@ -812,7 +812,7 @@ function addNewItem() {
     }
     table.appendChild(tbody);
     newItem.appendChild(table);
-    
+
     // Add buttons
     const buttonDiv = document.createElement('div');
     buttonDiv.className = 'item-buttons-row';
@@ -827,18 +827,18 @@ function addNewItem() {
         </div>
     `;
     newItem.appendChild(buttonDiv);
-    
+
     // Remove buttons from previous Item container
     lastItem.querySelector('.item-buttons-row').remove();
-    
+
     // Add new Item to container
     itemsContainer.appendChild(newItem);
-    
+
     // Add event listeners for new buttons
     newItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
     newItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
     newItem.querySelector('.add-item-btn').addEventListener('click', addNewItem);
-    newItem.querySelector('.delete-item-btn').addEventListener('click', function() {
+    newItem.querySelector('.delete-item-btn').addEventListener('click', function () {
         deleteItem(newItem.id);
     });
 }
@@ -847,12 +847,12 @@ function addNewItem() {
 function deleteItem(itemId) {
     const itemToDelete = document.getElementById(itemId);
     const itemContainers = document.querySelectorAll('.item-container');
-    
+
     // If there's only one Item, don't perform delete operation
     if (itemContainers.length <= 1) {
         return;
     }
-    
+
     // Get position of Item to be deleted
     let itemIndex = -1;
     for (let i = 0; i < itemContainers.length; i++) {
@@ -861,13 +861,13 @@ function deleteItem(itemId) {
             break;
         }
     }
-    
+
     // If it's the last Item, need to add buttons to previous Item
     if (itemIndex === itemContainers.length - 1) {
         const previousItem = itemContainers[itemIndex - 1];
         const buttonDiv = document.createElement('div');
         buttonDiv.className = 'item-buttons-row';
-        
+
         // If it's Item 1, no Delete item button needed
         if (previousItem.id === 'item-1') {
             buttonDiv.innerHTML = `
@@ -891,22 +891,22 @@ function deleteItem(itemId) {
                 </div>
             `;
         }
-        
+
         previousItem.appendChild(buttonDiv);
-        
+
         // Add event listeners for new buttons
         previousItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
         previousItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
         previousItem.querySelector('.add-item-btn').addEventListener('click', addNewItem);
-        
+
         const deleteItemBtn = previousItem.querySelector('.delete-item-btn');
         if (deleteItemBtn) {
-            deleteItemBtn.addEventListener('click', function() {
+            deleteItemBtn.addEventListener('click', function () {
                 deleteItem(previousItem.id);
             });
         }
     }
-    
+
     // Delete Item
     itemToDelete.remove();
 }
@@ -915,37 +915,37 @@ function deleteItem(itemId) {
 function collectItemsData() {
     const stimuli = [];
     const itemContainers = document.querySelectorAll('.item-container');
-    
+
     itemContainers.forEach(itemContainer => {
         const tbody = itemContainer.querySelector('.stimuli-table tbody');
         const rows = tbody.getElementsByTagName('tr');
         const itemData = {};
-        
+
         for (let i = 0; i < rows.length; i++) {
             const typeCell = rows[i].querySelector('.type-column input');
             const contentCell = rows[i].querySelector('.content-column input');
-            
+
             if (typeCell && contentCell) {
                 const type = typeCell.value.trim();
                 const content = contentCell.value.trim();
-                
+
                 if (type && content) {
                     itemData[type] = content;
                 }
             }
         }
-        
+
         // Only add to stimuli array when itemData is not empty
         if (Object.keys(itemData).length > 0) {
             stimuli.push(itemData);
         }
     });
-    
+
     return stimuli;
 }
 
 // Add Agent 2 Property
-addAgent2Button.addEventListener("click", function() {
+addAgent2Button.addEventListener("click", function () {
     const firstRowInputs = agent2Table.rows[1].getElementsByTagName('input'); // Get first row input boxes
     const newRow = agent2Table.insertRow(-1);
     const cell1 = newRow.insertCell(0);
@@ -966,7 +966,7 @@ addAgent2Button.addEventListener("click", function() {
 });
 
 // Delete Agent 2 Property
-deleteAgent2Button.addEventListener("click", function() {
+deleteAgent2Button.addEventListener("click", function () {
     const rowCount = agent2Table.rows.length;
     if (rowCount > 2) {
         agent2Table.deleteRow(rowCount - 1);
@@ -985,7 +985,7 @@ addAgent3Button.addEventListener('click', () => {
     input1.type = 'text';
     input1.placeholder = "Enter new aspect";
     cell1.appendChild(input1);
-    
+
     // Description column
     const cell2 = newRow.insertCell(1);
     cell2.className = "agent_3_description-column";
@@ -993,7 +993,7 @@ addAgent3Button.addEventListener('click', () => {
     input2.type = 'text';
     input2.placeholder = "Enter aspect's description";
     cell2.appendChild(input2);
-    
+
     // Minimum value column
     const cell3 = newRow.insertCell(2);
     cell3.className = "agent_3_minimum-column";
@@ -1002,7 +1002,7 @@ addAgent3Button.addEventListener('click', () => {
     input3.min = '0';
     input3.placeholder = "e.g. 0";
     cell3.appendChild(input3);
-    
+
     // Maximum value column
     const cell4 = newRow.insertCell(3);
     cell4.className = "agent_3_maximum-column";
@@ -1043,7 +1043,7 @@ function hideGenerationStatus() {
 // Update progress bar
 function updateProgress(progress) {
     console.log(`Updating progress bar to ${progress}%`);
-    
+
     // Ensure progress value is a number
     if (typeof progress !== 'number') {
         try {
@@ -1053,24 +1053,24 @@ function updateProgress(progress) {
             return;
         }
     }
-    
+
     // Progress value should be between 0-100
     progress = Math.max(0, Math.min(100, progress));
-    
+
     // Round to integer
     const roundedProgress = Math.round(progress);
-    
+
     // Get current progress
     let currentProgressText = progressBar.style.width || '0%';
     let currentProgress = parseInt(currentProgressText.replace('%', ''), 10) || 0;
-    
+
     // For special cases:
     // 1. If current progress is already 100%, no updates are accepted (unless explicitly reset to 0%)
     if (currentProgress >= 100 && roundedProgress > 0) {
         console.log(`Progress already at 100%, ignoring update to ${roundedProgress}%`);
         return;
     }
-    
+
     // 2. If the received progress is less than the current progress and the difference is more than 10%, it may be a new generation process
     //    At this time, we accept the smaller progress value
     const progressDifference = currentProgress - roundedProgress;
@@ -1083,18 +1083,18 @@ function updateProgress(progress) {
         console.log(`Ignoring backward progress update: ${roundedProgress}% < ${currentProgress}%`);
         return;
     }
-    
+
     // Update progress display
     progressBar.style.width = `${roundedProgress}%`;
     document.getElementById('progress_percentage').textContent = `${roundedProgress}%`;
-    
+
     console.log(`Progress bar updated to ${roundedProgress}%`);
-    
+
     // When progress reaches 100%, switch status text
     if (roundedProgress >= 100) {
         showCheckingStatus();
     }
-    
+
     // Enable/disable buttons
     if (roundedProgress > 0 && roundedProgress < 100) {
         // In progress
@@ -1110,26 +1110,26 @@ function updateProgress(progress) {
 function resetUI() {
     // Hide generating status text
     hideGenerationStatus();
-    
+
     // Enable all buttons
     generateButton.disabled = false;
-    clearButton.disabled = false; 
+    clearButton.disabled = false;
     stopButton.disabled = true; // Stop button remains disabled
-    
+
     // Enable all table-related buttons
     addAgent2Button.disabled = false;
     deleteAgent2Button.disabled = false;
     addAgent3Button.disabled = false;
     deleteAgent3Button.disabled = false;
-    
+
     // Enable Add/Delete buttons in all tables
     document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
         btn.disabled = false;
     });
-    
+
     // Enable model selection dropdown
     document.getElementById('model_choice').disabled = false;
-    
+
     // Determine whether API Key input box is available based on the currently selected model
     const selectedModel = document.getElementById('model_choice').value;
     if (selectedModel === 'GPT-4o') {
@@ -1137,18 +1137,18 @@ function resetUI() {
     } else {
         document.getElementById('api_key').disabled = true;
     }
-    
+
     // Enable all other input boxes and text areas
     document.getElementById('iteration').disabled = false;
     document.getElementById('experiment_design').disabled = false;
-    
+
     // Enable all input boxes in all tables
     document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
         if (input.id !== 'api_key') { // API Key input box is excluded
             input.disabled = false;
         }
     });
-    
+
     // Reset progress bar
     updateProgress(0);
 }
@@ -1164,7 +1164,7 @@ function validateInputs() {
         alert('Please choose a model!');
         return false;
     }
-    
+
     // If GPT-4o is selected, check API Key
     if (selectedModel === 'GPT-4o' && !apiKey) {
         alert('OpenAI API Key cannot be empty when using GPT-4o!');
@@ -1176,18 +1176,18 @@ function validateInputs() {
     for (let i = 0; i < itemContainers.length; i++) {
         const tbody = itemContainers[i].querySelector('.stimuli-table tbody');
         const rows = tbody.getElementsByTagName('tr');
-        
+
         for (let j = 0; j < rows.length; j++) {
             const typeCell = rows[j].querySelector('.type-column input');
             const contentCell = rows[j].querySelector('.content-column input');
-            
+
             if (typeCell && contentCell) {
                 const typeValue = typeCell.value.trim();
                 const contentValue = contentCell.value.trim();
-                
-            if (!typeValue || !contentValue) {
-                    alert(`All Components and Content fields in the "Item ${i+1}" table must be filled!`);
-                return false;
+
+                if (!typeValue || !contentValue) {
+                    alert(`All Components and Content fields in the "Item ${i + 1}" table must be filled!`);
+                    return false;
                 }
             }
         }
@@ -1247,7 +1247,7 @@ function validateInputs() {
         alert("'The number of items' must be a positive integer!");
         return false;
     }
-    
+
     return true; // If all checks pass, return true
 }
 
@@ -1264,10 +1264,10 @@ generateButton.addEventListener('click', () => {
 // Extract generation process as a standalone function
 function startGeneration() {
     updateProgress(0);
-    
+
     // Show "Generating..." status text
     showGeneratingStatus();
-    
+
     // Clear log display area
     clearLogs();
 
@@ -1276,28 +1276,28 @@ function startGeneration() {
 
     // Disable all buttons, except Stop button
     generateButton.disabled = true;
-    clearButton.disabled = true; 
+    clearButton.disabled = true;
     stopButton.disabled = false;
-    
+
     // Disable all table-related buttons
     addAgent2Button.disabled = true;
     deleteAgent2Button.disabled = true;
     addAgent3Button.disabled = true;
     deleteAgent3Button.disabled = true;
-    
+
     // Disable Add/Delete buttons in all tables
     document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
         btn.disabled = true;
     });
-    
+
     // Disable model selection dropdown
     document.getElementById('model_choice').disabled = true;
-    
+
     // Disable all input boxes and text areas
     document.getElementById('api_key').disabled = true;
     document.getElementById('iteration').disabled = true;
     document.getElementById('experiment_design').disabled = true;
-    
+
     // Disable all input boxes in all tables
     document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
         input.disabled = true;
@@ -1313,7 +1313,7 @@ function startGeneration() {
     // Find the first Item table
     const firstItemTable = document.querySelector('#item-1 .stimuli-table');
     if (firstItemTable) {
-            // Get all rows (skip header)
+        // Get all rows (skip header)
         const componentRows = Array.from(firstItemTable.querySelectorAll('tbody tr'));
         componentRows.forEach(row => {
             // Get input value from Components column
@@ -1387,7 +1387,7 @@ function startGeneration() {
     const fetchWithTimeout = (url, options, timeout = 10000) => {
         return Promise.race([
             fetch(url, options),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Request timed out')), timeout)
             )
         ]);
@@ -1396,44 +1396,44 @@ function startGeneration() {
     // Add retry counter
     let fetchRetryCount = 0;
     const maxFetchRetries = 2;
-    
+
     // Function to handle fetch requests
     function attemptFetch() {
         fetchRetryCount++;
         console.log(`Fetch尝试 ${fetchRetryCount}/${maxFetchRetries + 1}...`);
-        
+
         fetchWithTimeout(getApiUrl('generate_stimulus'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         }, 15000)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Stimulus generation started, server response:', data);
-            alert('Stimulus generation started!');
-            
-            // Start checking generation status
-            checkGenerationStatus();
-        })
-        .catch(error => {
-            console.error('Error starting stimulus generation:', error);
-            
-            // If there are retries left, continue trying
-            if (fetchRetryCount <= maxFetchRetries) {
-                console.log(`Request failed, trying again...`);
-                setTimeout(attemptFetch, 2000);  // Wait 2 seconds before retrying
-            } else {
-                resetUI();
-                alert(`Failed to start stimulus generation: ${error.message}. Please try again later.`);
-            }
-        });
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Stimulus generation started, server response:', data);
+                alert('Stimulus generation started!');
+
+                // Start checking generation status
+                checkGenerationStatus();
+            })
+            .catch(error => {
+                console.error('Error starting stimulus generation:', error);
+
+                // If there are retries left, continue trying
+                if (fetchRetryCount <= maxFetchRetries) {
+                    console.log(`Request failed, trying again...`);
+                    setTimeout(attemptFetch, 2000);  // Wait 2 seconds before retrying
+                } else {
+                    resetUI();
+                    alert(`Failed to start stimulus generation: ${error.message}. Please try again later.`);
+                }
+            });
     }
-    
+
     // Start first request attempt
     attemptFetch();
 }
@@ -1451,7 +1451,7 @@ function checkGenerationStatus() {
                 if (response.status === 400) {
                     // Maybe session expired, wait 2 seconds before retrying
                     console.log("Session may be temporarily unavailable, retrying...");
-                    window.statusCheckTimer = setTimeout(function() {
+                    window.statusCheckTimer = setTimeout(function () {
                         checkGenerationStatus();
                     }, 2000);
                     return null; // Don't continue processing current response
@@ -1462,9 +1462,9 @@ function checkGenerationStatus() {
         })
         .then(data => {
             if (!data) return; // If null (due to session issue), return immediately
-            
+
             console.log("Generation status:", data);
-            
+
             if (data.status === 'error') {
                 // If session invalid error, try to restart generation process
                 if (data.error_message === 'Invalid session') {
@@ -1473,18 +1473,18 @@ function checkGenerationStatus() {
                     window.location.reload();
                     return;
                 }
-                
+
                 alert('Error: ' + data.error_message);
                 resetUI();
                 return; // Immediately stop polling
             }
-            
+
             if (data.status === 'completed') {
                 // Confirm again that there is a file before displaying completion message
                 if (data.file) {
                     // Save current file name for future check to avoid duplicates
                     const currentFile = data.file;
-                    
+
                     // Ensure file contains current session ID to prevent downloading incorrect file
                     if (!currentFile.includes(sessionId)) {
                         console.error("File does not match current session:", currentFile, sessionId);
@@ -1492,7 +1492,7 @@ function checkGenerationStatus() {
                         resetUI();
                         return;
                     }
-                    
+
                     // Use timestamp to ensure file name is unique, avoid browser cache
                     const timestamp = Date.now();
                     const downloadUrl = `${getApiUrl(`download/${currentFile}`)}?t=${timestamp}`;
@@ -1503,19 +1503,19 @@ function checkGenerationStatus() {
                         clearTimeout(window.statusCheckTimer);
                         window.statusCheckTimer = null;
                     }
-                    
+
                     // Create download link element
                     const link = document.createElement('a');
                     hideGenerationStatus(); // Hide status text
-                    
+
                     // Use timestamp URL to avoid browser cache
                     link.href = downloadUrl;
                     link.download = currentFile;
                     document.body.appendChild(link); // Add to DOM
-                    
+
                     // Show success message
                     alert('Stimulus generation complete!');
-                    
+
                     // Download file
                     setTimeout(() => {
                         link.click();
@@ -1524,10 +1524,10 @@ function checkGenerationStatus() {
                             document.body.removeChild(link);
                         }, 100);
                     }, 500);
-                    
+
                     // Reset UI state
                     resetUI();
-                    
+
                     // Reset polling counter
                     window.retryCount = 0;
                 } else {
@@ -1542,14 +1542,14 @@ function checkGenerationStatus() {
                 resetUI();
             } else if (data.status === 'running') {
                 updateProgress(data.progress);
-                
+
                 // Add extra check - if progress is 100 but status is still running
                 if (data.progress >= 100) {
                     console.log("Progress is 100% but status is still running, waiting for file...");
                     // Set to "Checking status & Creating file..."
                     showCheckingStatus();
                     // Give server more time to complete file generation
-                    window.statusCheckTimer = setTimeout(function() {
+                    window.statusCheckTimer = setTimeout(function () {
                         checkGenerationStatus();
                     }, 2000); // Extend to 2 seconds to wait for file generation
                 } else {
@@ -1557,14 +1557,14 @@ function checkGenerationStatus() {
                     if (data.progress > 0 && data.progress < 100) {
                         showGeneratingStatus();
                     }
-                    
+
                     // Adjust polling frequency based on progress, the higher the progress, the more frequent the check
                     let pollInterval = 1000; // Default 1 second
                     if (data.progress > 0) {
                         // When progress is greater than 0, check more frequently
                         pollInterval = 500; // Change to 0.5 seconds
                     }
-                    window.statusCheckTimer = setTimeout(function() {
+                    window.statusCheckTimer = setTimeout(function () {
                         checkGenerationStatus();
                     }, pollInterval);
                 }
@@ -1580,10 +1580,10 @@ function checkGenerationStatus() {
             // If there is an error, wait 3 seconds before retrying, but only up to 3 times
             if (!window.retryCount) window.retryCount = 0;
             window.retryCount++;
-            
+
             if (window.retryCount <= 3) {
                 console.log(`Retrying status check (${window.retryCount}/3)...`);
-                window.statusCheckTimer = setTimeout(function() {
+                window.statusCheckTimer = setTimeout(function () {
                     checkGenerationStatus();
                 }, 3000);
             } else {
@@ -1597,7 +1597,7 @@ function checkGenerationStatus() {
 stopButton.addEventListener('click', () => {
     // Add confirmation dialogue box
     const confirmStop = confirm('Are you sure you want to stop?');
-    
+
     // Only execute stop operation when user clicks "Yes"
     if (confirmStop) {
         fetch(getApiUrl('stop_generation'), { method: 'POST' })
@@ -1625,7 +1625,7 @@ clearButton.addEventListener('click', () => {
     document.getElementById('model_choice').value = '';
     // Disable API key input box
     document.getElementById('api_key').disabled = true;
-    
+
     const textAreas = [
         'agent1_properties',
         'agent2_properties',
@@ -1645,7 +1645,7 @@ clearButton.addEventListener('click', () => {
     while (itemsContainer.firstChild) {
         itemsContainer.removeChild(itemsContainer.firstChild);
     }
-    
+
     // Create new Item 1
     const newItem = document.createElement('div');
     newItem.className = 'item-container';
@@ -1677,7 +1677,7 @@ clearButton.addEventListener('click', () => {
         </div>
     `;
     itemsContainer.appendChild(newItem);
-    
+
     // Add event listener to new buttons
     newItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
     newItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
@@ -1704,10 +1704,10 @@ clearButton.addEventListener('click', () => {
     agent3PropertiesTable.rows[1].cells[1].querySelector('input').value = '';
     agent3PropertiesTable.rows[1].cells[2].querySelector('input').value = '';
     agent3PropertiesTable.rows[1].cells[3].querySelector('input').value = '';
-    
+
     // Reset progress bar
     updateProgress(0);
-    
+
     // Clear log area
     clearLogs();
 });
@@ -1719,7 +1719,7 @@ function periodicSocketCheck() {
             console.log("Detected WebSocket connection disconnected, resetting connection flag");
             socketInitialized = false;
         }
-        
+
         // Only try to reconnect if there is no connection attempt in progress, and the time since last attempt is reasonable
         if (!socketConnectionInProgress && (!socketReconnectTimer || socketReconnectAttempts > 10)) {
             console.log("Trying to reconnect WebSocket");
@@ -1728,28 +1728,28 @@ function periodicSocketCheck() {
             initializeSocket();
         }
     }
-    
+
     // Check connection status every 30 seconds
     setTimeout(periodicSocketCheck, 30000);
-} 
+}
 
 // Disable all interactive elements on the page
 function disableAllElements() {
     // Start safety timeout
     startSafetyTimeout();
-    
+
     // Disable all dropdowns, text boxes, and text areas
     document.querySelectorAll('input, textarea, select').forEach(element => {
         element.disabled = true;
     });
-    
+
     // Disable all buttons (except the AutoGenerate button)
     document.querySelectorAll('button').forEach(button => {
         if (button.id !== 'auto_generate_button') {
             button.disabled = true;
         }
     });
-    
+
     // Add disabled style to tables
     document.querySelectorAll('table').forEach(table => {
         table.classList.add('disabled-table');
@@ -1759,20 +1759,20 @@ function disableAllElements() {
     const overlay = document.createElement('div');
     overlay.id = 'page-overlay';
     overlay.className = 'page-overlay';
-    
+
     // Add loading animation
     const spinner = document.createElement('div');
     spinner.className = 'loading-spinner';
-    
+
     // Add processing text
     const loadingText = document.createElement('div');
     loadingText.className = 'loading-text';
     loadingText.textContent = 'Generating properties...';
-    
+
     // Add animation and text to overlay
     overlay.appendChild(spinner);
     overlay.appendChild(loadingText);
-    
+
     document.body.appendChild(overlay);
 }
 
@@ -1780,7 +1780,7 @@ function disableAllElements() {
 function enableAllElements() {
     // Clear safety timeout
     clearSafetyTimeout();
-    
+
     // Enable all dropdowns, text boxes, and text areas
     document.querySelectorAll('input, textarea, select').forEach(element => {
         // Check if element is API key input box, and model selection is not GPT-4o
@@ -1790,17 +1790,17 @@ function enableAllElements() {
             element.disabled = false;
         }
     });
-    
+
     // Enable all buttons
     document.querySelectorAll('button').forEach(button => {
         button.disabled = false;
     });
-    
+
     // Restore Stop button state (should be disabled by default)
     if (stopButton) {
         stopButton.disabled = true;
     }
-    
+
     // Remove table disabled style
     document.querySelectorAll('table').forEach(table => {
         table.classList.remove('disabled-table');
@@ -1814,7 +1814,7 @@ function enableAllElements() {
 }
 
 // Modify AutoGenerate button click event
-autoGenerateButton.addEventListener('click', function() {
+autoGenerateButton.addEventListener('click', function () {
     // First validate inputs
     if (!validateAutoGenerateInputs()) {
         return;
@@ -1823,27 +1823,27 @@ autoGenerateButton.addEventListener('click', function() {
     // Show loading status
     autoGenerateButton.disabled = true;
     autoGenerateButton.innerText = "Generating...";
-    
+
     // Disable all other elements on the page
     disableAllElements();
-    
+
     // Collect example stimuli from tables
     const exampleStimuli = collectExampleStimuli();
     // Get experimental design
     const experimentDesign = document.getElementById('experiment_design').value.trim();
-    
+
     // Build prompt, replace placeholders
     let prompt = autoGeneratePromptTemplate
         .replace('{Experimental design}', experimentDesign)
         .replace('{Example stimuli}', JSON.stringify(exampleStimuli, null, 2));
-    
+
     // Record used model and built prompt
     const selectedModel = modelChoice.value;
     console.log("Model used:", selectedModel);
     console.log("Experimental Design:", experimentDesign);
     console.log("Example Stimuli:", exampleStimuli);
     console.log("Complete Prompt:", prompt);
-    
+
     if (selectedModel === 'GPT-4o') {
         // Use OpenAI API
         callOpenAIAPI(prompt);
@@ -1857,7 +1857,7 @@ autoGenerateButton.addEventListener('click', function() {
 function callOpenAIAPI(prompt) {
     try {
         const apiKey = document.getElementById('api_key').value.trim();
-        
+
         // Prepare request body
         const requestBody = {
             model: "gpt-4o",
@@ -1870,7 +1870,7 @@ function callOpenAIAPI(prompt) {
             temperature: 0.7,
             max_tokens: 2000
         };
-        
+
         // Send API request
         fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -1880,37 +1880,37 @@ function callOpenAIAPI(prompt) {
             },
             body: JSON.stringify(requestBody)
         })
-        .then(response => {
-            // Check response status
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Process API response
-            const content = data.choices[0].message.content;
-            // Wrap processing in try-catch
-            try {
-                processAPIResponse(content);
-            } catch (processingError) {
-                console.error('Error processing response:', processingError);
+            .then(response => {
+                // Check response status
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Process API response
+                const content = data.choices[0].message.content;
+                // Wrap processing in try-catch
+                try {
+                    processAPIResponse(content);
+                } catch (processingError) {
+                    console.error('Error processing response:', processingError);
+                    // Ensure page is not locked
+                    enableAllElements();
+                    alert(`Error processing response: ${processingError.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('OpenAI API call error:', error);
                 // Ensure page is not locked
                 enableAllElements();
-                alert(`Error processing response: ${processingError.message}`);
-            }
-        })
-        .catch(error => {
-            console.error('OpenAI API call error:', error);
-            // Ensure page is not locked
-            enableAllElements();
-            alert(`OpenAI API call failed: ${error.message}`);
-        })
-        .finally(() => {
-            // Restore button state
-            autoGenerateButton.disabled = false;
-            autoGenerateButton.innerText = "AutoGenerate properties";
-        });
+                alert(`OpenAI API call failed: ${error.message}`);
+            })
+            .finally(() => {
+                // Restore button state
+                autoGenerateButton.disabled = false;
+                autoGenerateButton.innerText = "AutoGenerate properties";
+            });
     } catch (error) {
         // Catch any errors that occur before setting up or executing API call
         console.error('Error setting up API call:', error);
@@ -1929,7 +1929,7 @@ function callHuggingFaceAPI(prompt) {
         prompt: prompt,
         model: "meta-llama/Llama-3.3-70B-Instruct"
     };
-    
+
     // Send API request to the backend
     fetch('/api/huggingface_inference', {
         method: 'POST',
@@ -1938,80 +1938,80 @@ function callHuggingFaceAPI(prompt) {
         },
         body: JSON.stringify(requestBody)
     })
-    .then(response => {
-        // Check response status
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        // Process API response
-        const content = data.response;
-        processAPIResponse(content);
-    })
-    .catch(error => {
-        console.error('Hugging Face API call error:', error);
-        
-        // If there is no backend API, use fallback method
-        if (error.message.includes('404')) {
-            try {
-                // Try to call OpenAI directly to get example properties
-                callOpenAIFallback(prompt);
-            } catch (fallbackError) {
-                // If fallback also fails, ensure all elements are enabled
-                console.error('OpenAI fallback error:', fallbackError);
-                enableAllElements();
-                autoGenerateButton.disabled = false;
-                autoGenerateButton.innerText = "AutoGenerate properties";
-                alert(`Both API calls failed. Please try again later.`);
+        .then(response => {
+            // Check response status
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
             }
-            return;
-        }
-        
-        // For other types of errors, display error message and enable page elements
-        alert(`Hugging Face API call failed: ${error.message}`);
-        enableAllElements();
-    })
-    .finally(() => {
-        // Restore button state (but do not enable page elements in fallback case, as it will be handled in fallback function)
-        autoGenerateButton.disabled = false;
-        autoGenerateButton.innerText = "AutoGenerate properties";
-    });
+            return response.json();
+        })
+        .then(data => {
+            // Process API response
+            const content = data.response;
+            processAPIResponse(content);
+        })
+        .catch(error => {
+            console.error('Hugging Face API call error:', error);
+
+            // If there is no backend API, use fallback method
+            if (error.message.includes('404')) {
+                try {
+                    // Try to call OpenAI directly to get example properties
+                    callOpenAIFallback(prompt);
+                } catch (fallbackError) {
+                    // If fallback also fails, ensure all elements are enabled
+                    console.error('OpenAI fallback error:', fallbackError);
+                    enableAllElements();
+                    autoGenerateButton.disabled = false;
+                    autoGenerateButton.innerText = "AutoGenerate properties";
+                    alert(`Both API calls failed. Please try again later.`);
+                }
+                return;
+            }
+
+            // For other types of errors, display error message and enable page elements
+            alert(`Hugging Face API call failed: ${error.message}`);
+            enableAllElements();
+        })
+        .finally(() => {
+            // Restore button state (but do not enable page elements in fallback case, as it will be handled in fallback function)
+            autoGenerateButton.disabled = false;
+            autoGenerateButton.innerText = "AutoGenerate properties";
+        });
 }
 
 // Modify fallback method, ensure all elements are enabled when complete
 function callOpenAIFallback(prompt) {
     // First remove current overlay, as it will cause freezing after alert
     enableAllElements();
-    
+
     alert("Will use OpenAI API as fallback. Please make sure you provide a valid OpenAI API key.");
-    
+
     // Prompt user to enter OpenAI API key
     const apiKey = window.prompt("Please enter your OpenAI API Key:");
     if (!apiKey || apiKey.trim() === '') {
         alert("No API key provided, cannot continue.");
-        
+
         // Restore button state
         autoGenerateButton.disabled = false;
         autoGenerateButton.innerText = "AutoGenerate properties";
-        
+
         // Enable all elements on the page (although they were enabled at the start, confirm again here)
         enableAllElements();
         return;
     }
-    
+
     // Re-disable page elements, as a new API call is about to start
     disableAllElements();
-    
+
     // Enable API key input box and set value
     const apiKeyInput = document.getElementById('api_key');
     apiKeyInput.disabled = false;
     apiKeyInput.value = apiKey;
-    
+
     // Change model selection to GPT-4o
     modelChoice.value = 'GPT-4o';
-    
+
     // Call OpenAI API
     callOpenAIAPI(prompt);
 }
@@ -2020,18 +2020,18 @@ function callOpenAIFallback(prompt) {
 function processAPIResponse(response) {
     try {
         console.log("API response:", response);
-        
+
         // Extract Requirements dictionary
         const requirementsMatch = response.match(/Requirements:\s*\{([^}]+)\}/s);
         let requirements = {};
-        
+
         if (requirementsMatch && requirementsMatch[1]) {
             try {
                 // Try to parse complete JSON
                 requirements = JSON.parse(`{${requirementsMatch[1]}}`);
             } catch (e) {
                 console.error("Failed to parse Requirements JSON:", e);
-                
+
                 // Use regular expression to parse key-value pairs
                 const keyValuePairs = requirementsMatch[1].match(/"([^"]+)":\s*"([^"]+)"/g);
                 if (keyValuePairs) {
@@ -2044,18 +2044,18 @@ function processAPIResponse(response) {
                 }
             }
         }
-        
+
         // Extract Scoring Dimensions dictionary
         const scoringMatch = response.match(/Scoring Dimensions:\s*\{([^}]+)\}/s);
         let scoringDimensions = {};
-        
+
         if (scoringMatch && scoringMatch[1]) {
             try {
                 // Try to parse complete JSON
                 scoringDimensions = JSON.parse(`{${scoringMatch[1]}}`);
             } catch (e) {
                 console.error("Failed to parse Scoring Dimensions JSON:", e);
-                
+
                 // Use regular expression to parse key-value pairs
                 const keyValuePairs = scoringMatch[1].match(/"([^"]+)":\s*"([^"]+)"/g);
                 if (keyValuePairs) {
@@ -2068,7 +2068,7 @@ function processAPIResponse(response) {
                 }
             }
         }
-        
+
         // If no content is found above, try to find curly braces
         if (Object.keys(requirements).length === 0 && Object.keys(scoringDimensions).length === 0) {
             const jsonMatches = response.match(/\{([^{}]*)\}/g);
@@ -2081,24 +2081,24 @@ function processAPIResponse(response) {
                 }
             }
         }
-        
+
         // Confirm content has been extracted
         if (Object.keys(requirements).length === 0 || Object.keys(scoringDimensions).length === 0) {
             // First enable all elements, then display error message
             enableAllElements();
             throw new Error("Could not extract valid Requirements or Scoring Dimensions from API response");
         }
-        
+
         // Fill validator table
         fillValidatorTable(requirements);
-        
+
         // Fill scorer table
         fillScorerTable(scoringDimensions);
-        
+
         // Ensure all elements are enabled before displaying completion message
         enableAllElements();
-        
-        alert("Auto-generation complete! Validator and Scorer tables have been filled.");
+
+        alert("Auto-generation complete! Please carefully review the content in the Validator and Scorer tables to ensure they meet your experimental design requirements.");
     } catch (error) {
         console.error("Error processing API response:", error);
         // Ensure all elements are enabled regardless
@@ -2113,20 +2113,20 @@ function fillValidatorTable(requirements) {
     const tbody = agent2Table.querySelector('tbody');
     const currentRowCount = tbody.querySelectorAll('tr').length;
     const requirementsCount = Object.keys(requirements).length;
-    
+
     console.log(`Validator table: current rows = ${currentRowCount}, required rows = ${requirementsCount}`);
-    
+
     // Calculate how many rows need to be added or deleted
     if (requirementsCount > currentRowCount) {
         // Need to add rows
         const rowsToAdd = requirementsCount - currentRowCount;
         console.log(`Adding ${rowsToAdd} rows to Validator table`);
-        
+
         // Add rows directly using DOM operations, not through clicking buttons
         for (let i = 0; i < rowsToAdd; i++) {
             // Create new row
             const newRow = document.createElement('tr');
-            
+
             // Create and add first cell (property name)
             const propertyCell = document.createElement('td');
             propertyCell.className = "agent_2_properties-column";
@@ -2134,7 +2134,7 @@ function fillValidatorTable(requirements) {
             propertyInput.type = "text";
             propertyInput.placeholder = "Enter new property";
             propertyCell.appendChild(propertyInput);
-            
+
             // Create and add second cell (description)
             const descriptionCell = document.createElement('td');
             descriptionCell.className = "agent_2_description-column";
@@ -2142,11 +2142,11 @@ function fillValidatorTable(requirements) {
             descriptionInput.type = "text";
             descriptionInput.placeholder = "Enter property's description";
             descriptionCell.appendChild(descriptionInput);
-            
+
             // Add cells to row
             newRow.appendChild(propertyCell);
             newRow.appendChild(descriptionCell);
-            
+
             // Add row to table
             tbody.appendChild(newRow);
         }
@@ -2154,17 +2154,17 @@ function fillValidatorTable(requirements) {
         // Need to delete rows
         const rowsToDelete = currentRowCount - requirementsCount;
         console.log(`Deleting ${rowsToDelete} rows from Validator table`);
-        
+
         // Delete extra rows, starting from the last row
         for (let i = 0; i < rowsToDelete; i++) {
             tbody.removeChild(tbody.lastElementChild);
         }
     }
-    
+
     // Get updated rows and fill in content
     const updatedRows = agent2Table.querySelectorAll('tbody tr');
     let index = 0;
-    
+
     for (const [key, value] of Object.entries(requirements)) {
         if (index < updatedRows.length) {
             const cells = updatedRows[index].querySelectorAll('input');
@@ -2183,20 +2183,20 @@ function fillScorerTable(scoringDimensions) {
     const tbody = agent3PropertiesTable.querySelector('tbody');
     const currentRowCount = tbody.querySelectorAll('tr').length;
     const dimensionsCount = Object.keys(scoringDimensions).length;
-    
+
     console.log(`Scorer table: current rows = ${currentRowCount}, required rows = ${dimensionsCount}`);
-    
+
     // Calculate how many rows need to be added or deleted
     if (dimensionsCount > currentRowCount) {
         // Need to add rows
         const rowsToAdd = dimensionsCount - currentRowCount;
         console.log(`Adding ${rowsToAdd} rows to Scorer table`);
-        
+
         // Add rows directly using DOM operations, not through clicking buttons
         for (let i = 0; i < rowsToAdd; i++) {
             // Create new row
             const newRow = document.createElement('tr');
-            
+
             // Create and add first cell (aspect name)
             const aspectCell = document.createElement('td');
             aspectCell.className = "agent_3_properties-column";
@@ -2204,7 +2204,7 @@ function fillScorerTable(scoringDimensions) {
             aspectInput.type = "text";
             aspectInput.placeholder = "Enter new aspect";
             aspectCell.appendChild(aspectInput);
-            
+
             // Create and add second cell (description)
             const descriptionCell = document.createElement('td');
             descriptionCell.className = "agent_3_description-column";
@@ -2212,7 +2212,7 @@ function fillScorerTable(scoringDimensions) {
             descriptionInput.type = "text";
             descriptionInput.placeholder = "Enter aspect's description";
             descriptionCell.appendChild(descriptionInput);
-            
+
             // Create and add third cell (minimum value)
             const minCell = document.createElement('td');
             minCell.className = "agent_3_minimum-column";
@@ -2221,7 +2221,7 @@ function fillScorerTable(scoringDimensions) {
             minInput.min = "0";
             minInput.placeholder = "e.g. 0";
             minCell.appendChild(minInput);
-            
+
             // Create and add fourth cell (maximum value)
             const maxCell = document.createElement('td');
             maxCell.className = "agent_3_maximum-column";
@@ -2230,13 +2230,13 @@ function fillScorerTable(scoringDimensions) {
             maxInput.min = "0";
             maxInput.placeholder = "e.g. 10";
             maxCell.appendChild(maxInput);
-            
+
             // Add cells to row
             newRow.appendChild(aspectCell);
             newRow.appendChild(descriptionCell);
             newRow.appendChild(minCell);
             newRow.appendChild(maxCell);
-            
+
             // Add row to table
             tbody.appendChild(newRow);
         }
@@ -2244,17 +2244,17 @@ function fillScorerTable(scoringDimensions) {
         // Need to delete rows
         const rowsToDelete = currentRowCount - dimensionsCount;
         console.log(`Deleting ${rowsToDelete} rows from Scorer table`);
-        
+
         // Delete extra rows, starting from the last row
         for (let i = 0; i < rowsToDelete; i++) {
             tbody.removeChild(tbody.lastElementChild);
         }
     }
-    
+
     // Get updated rows and fill in content
     const updatedRows = agent3PropertiesTable.querySelectorAll('tbody tr');
     let index = 0;
-    
+
     for (const [key, value] of Object.entries(scoringDimensions)) {
         if (index < updatedRows.length) {
             const cells = updatedRows[index].querySelectorAll('input');
@@ -2270,15 +2270,15 @@ function fillScorerTable(scoringDimensions) {
 }
 
 // Add global error handler, ensure page is not locked
-window.addEventListener('error', function(event) {
+window.addEventListener('error', function (event) {
     console.error('Global error:', event.error || event.message);
-    
+
     // If page overlay exists and has been active for more than 30 seconds, remove it automatically
     const overlay = document.getElementById('page-overlay');
     if (overlay && document.body.contains(overlay)) {
         console.warn('Detected global error, removing possibly frozen page overlay');
         document.body.removeChild(overlay);
-        
+
         // Restore normal page interaction
         enableUI();
     }
@@ -2287,7 +2287,7 @@ window.addEventListener('error', function(event) {
 // Add safety timeout, ensure page is unlocked after 30 seconds
 function startSafetyTimeout() {
     console.log('Starting safety timeout');
-    window.safetyTimeoutId = setTimeout(function() {
+    window.safetyTimeoutId = setTimeout(function () {
         console.log('Safety timeout triggered');
         if (document.getElementById('page-overlay')) {
             console.log('Removing overlay due to safety timeout');
@@ -2324,31 +2324,31 @@ function disableUI() {
     deleteAgent3Button.disabled = true;
     modelSelect.disabled = true;
     apiKeyInput.disabled = true;
-    
+
     // Enable Stop button
     stopButton.disabled = false;
-    
+
     // Add element to display "Generating..." status
     updateGenerationStatus('generating');
-    
+
     // Create and display page overlay
     createPageOverlay("Generating stimuli, please wait...");
-    
+
     // Set UI protection timeout, ensure interface is not locked indefinitely
     if (window.uiProtectionTimeout) {
         clearTimeout(window.uiProtectionTimeout);
     }
-    
+
     window.uiProtectionTimeout = setTimeout(() => {
         console.warn("UI protection timeout triggered - interface will automatically restore after 30 seconds");
         enableUI();
-        
+
         // Remove overlay (if it exists)
         const overlay = document.getElementById('page-overlay');
         if (overlay && document.body.contains(overlay)) {
             document.body.removeChild(overlay);
         }
-        
+
         // Display warning message
         alert("Operation timed out. If you are waiting for the generation result, please try again later.");
     }, 30000); // 30 second timeout
@@ -2364,22 +2364,22 @@ function enableUI() {
     addAgent3Button.disabled = false;
     deleteAgent3Button.disabled = false;
     modelSelect.disabled = false;
-    
+
     // Determine if API key input box is available based on current model selection
     handleModelChange();
-    
+
     // Disable Stop button
     stopButton.disabled = true;
-    
+
     // Clear "Generating..." status display
     updateGenerationStatus('idle');
-    
+
     // Remove overlay (if it exists)
     const overlay = document.getElementById('page-overlay');
     if (overlay && document.body.contains(overlay)) {
         document.body.removeChild(overlay);
     }
-    
+
     // Clear UI protection timeout
     if (window.uiProtectionTimeout) {
         clearTimeout(window.uiProtectionTimeout);
@@ -2394,17 +2394,17 @@ function createPageOverlay(message) {
     if (existingOverlay) {
         document.body.removeChild(existingOverlay);
     }
-    
+
     // Create overlay element
     const overlay = document.createElement('div');
     overlay.id = 'page-overlay';
     overlay.className = 'page-overlay';
-    
+
     // Create loading animation
     const spinner = document.createElement('div');
     spinner.className = 'loading-spinner';
     overlay.appendChild(spinner);
-    
+
     // Create loading text
     const loadingText = document.createElement('div');
     loadingText.className = 'loading-text';
@@ -2422,22 +2422,22 @@ function createPageOverlay(message) {
     cancelButton.style.borderRadius = '5px';
     cancelButton.style.color = 'white';
     cancelButton.style.cursor = 'pointer';
-    
+
     // Add click event
-    cancelButton.addEventListener('click', function() {
+    cancelButton.addEventListener('click', function () {
         console.log("User clicked cancel button, restoring UI");
         enableUI();
     });
-    
+
     // Show cancel button after 15 seconds (short operations do not need to show, to avoid UI flickering)
     setTimeout(() => {
         if (document.body.contains(overlay)) {
             overlay.appendChild(cancelButton);
         }
     }, 15000);
-    
+
     // Add to page
     document.body.appendChild(overlay);
-    
+
     return overlay;
 }
