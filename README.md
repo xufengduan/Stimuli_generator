@@ -100,25 +100,98 @@ stimulus-generator webui --port 5001
 | `--debug` | Enable debug mode |
 | `--share` | Create public link (requires additional dependencies) |
 
-### Usage Steps
+## 🎯 Usage Steps
 
-1. **Configure Generation Parameters**:
-   - Select the language model to use
-   - If using GPT-4, enter OpenAI API Key
-   - Fill in experimental design description
-   - Add example stimulus materials
-   - Set validation conditions
-   - Define scoring dimensions
+### 1. Configure Generation Parameters
 
-2. **Start Generation**:
-   - Click the "Generate stimulus" button to start generation
-   - Monitor generation progress in real time
-   - View detailed log information
-   - Click the "Stop" button to terminate generation if necessary
+#### 1.1 Select Language Model
+![Select Language Model](path/to/select_model.png)
 
-3. **Get Results**:
-   - Results file in CSV format will be automatically downloaded upon completion
-   - Results file contains generated stimulus materials and their scores
+Choose between:
+- GPT-4 (requires OpenAI API Key)
+- Meta Llama 3.3 70B Instruct model
+
+#### 1.2 Enter API Key (if using GPT-4)
+![Enter API Key](path/to/enter_api_key.png)
+
+If you selected GPT-4, enter your OpenAI API Key in the designated field.
+
+#### 1.3 Add Example Stimulus Materials
+![Add Example Materials](path/to/add_examples.png)
+
+Components are the building blocks of your stimuli. For example, in a study investigating contextual predictability on word choice:
+- A word pair (e.g., math/mathematics)
+- Supportive context (high predictability)
+- Neutral context
+
+Each component should be filled with its corresponding content. For instance:
+- Word pair: "math/mathematics"
+- Supportive context: "The student solved the simple arithmetic problem using basic..."
+- Neutral context: "The student was working on a problem that required..."
+
+To add more examples:
+1. Complete all components for the first item
+2. Click "Add Item" in the bottom right corner
+3. Repeat for additional examples (recommended: at least 3 examples)
+
+#### 1.4 Fill in Experimental Design Description
+![Experimental Design](path/to/experimental_design.png)
+
+When writing your experimental design description, include these key components:
+
+1. **Purpose of the Stimuli**
+   - Explain the experiment's goal
+   - Describe how the stimuli support this goal
+   - Example: "We are designing stimuli for an experiment investigating whether people prefer shorter words in predictive contexts."
+
+2. **Core Structure of Each Stimulus Item**
+   - Describe the components of each item
+   - Example: "Each stimulus item includes a word pair and two contexts."
+
+3. **Detailed Description of Each Element**
+   For each component, specify:
+   - What it is
+   - How it's constructed
+   - What constraints apply
+   - What to avoid
+   - Example: "The word pair consists of a short and a long form of the same word... Avoid pairs where either word forms part of a fixed or common phrase."
+
+4. **Experimental Conditions or Variants**
+   Explain:
+   - Definition of each condition
+   - Construction criteria
+   - Matching constraints
+   - Example: "The supportive context should strongly predict the missing final word... The two contexts should be matched for length."
+
+5. **Example Item**
+   Include at least one complete example with labeled parts.
+
+6. **Formatting Guidelines**
+   Note any specific formatting or submission requirements.
+
+#### 1.5 Review Auto-generated Properties
+![Review Properties](path/to/review_properties.png)
+
+After completing the experimental design:
+1. Click "Auto-generate Properties"
+2. The system will automatically set:
+   - Validation conditions
+   - Scoring dimensions
+3. **Important**: Review and adjust these auto-generated properties as needed
+
+### 2. Start Generation
+![Start Generation](path/to/start_generation.png)
+
+1. Click the "Generate stimulus" button
+2. Monitor progress in real-time
+3. View detailed logs
+4. Use "Stop" button if needed
+
+### 3. Get Results
+![Get Results](path/to/get_results.png)
+
+- CSV file automatically downloads upon completion
+- Contains generated materials and scores
 
 ## 📂 File Structure
 
@@ -306,25 +379,98 @@ stimulus-generator webui --port 5001
 | `--debug` | 启用调试模式 |
 | `--share` | 创建公共链接（需要安装额外依赖） |
 
-### 使用步骤
+## 🎯 使用步骤
 
-1. **配置生成参数**：
-   - 选择使用的语言模型
-   - 如使用 GPT-4，输入 OpenAI API Key
-   - 填写实验设计说明
-   - 添加示例刺激材料
-   - 设置验证条件
-   - 定义评分维度
+### 1. 配置生成参数
 
-2. **开始生成**：
-   - 点击 "Generate stimulus" 按钮开始生成
-   - 实时监控生成进度
-   - 查看详细日志信息
-   - 必要时可点击 "Stop" 按钮终止生成
+#### 1.1 选择语言模型
+![选择语言模型](path/to/select_model.png)
 
-3. **获取结果**：
-   - 生成完成后自动下载 CSV 格式的结果文件
-   - 结果文件包含生成的刺激材料及其评分
+可选择：
+- GPT-4（需要 OpenAI API Key）
+- Meta Llama 3.3 70B Instruct 模型
+
+#### 1.2 输入 API Key（如果使用 GPT-4）
+![输入 API Key](path/to/enter_api_key.png)
+
+如果选择了 GPT-4，请在指定字段中输入您的 OpenAI API Key。
+
+#### 1.3 添加示例刺激材料
+![添加示例材料](path/to/add_examples.png)
+
+组件（Components）是刺激材料的组成部分。例如，在研究语境可预测性对词汇选择的影响时：
+- 词对（例如：math/mathematics）
+- 支持性语境（高可预测性）
+- 中性语境
+
+每个组件都需要填写相应的内容。例如：
+- 词对："math/mathematics"
+- 支持性语境："学生使用基本的算术解决了这个简单的问题..."
+- 中性语境："学生正在解决一个需要..."
+
+添加更多示例：
+1. 完成第一个项目的所有组件
+2. 点击右下角的"添加项目"按钮
+3. 重复上述步骤添加更多示例（建议至少添加3个示例）
+
+#### 1.4 填写实验设计说明
+![实验设计](path/to/experimental_design.png)
+
+在编写实验设计说明时，请包含以下关键部分：
+
+1. **刺激材料的目的**
+   - 解释实验目标
+   - 描述刺激材料如何支持这个目标
+   - 示例："我们正在设计用于研究人们在可预测语境中是否倾向于使用较短词汇的实验刺激材料。"
+
+2. **每个刺激项目的核心结构**
+   - 描述每个项目的组成部分
+   - 示例："每个刺激项目包含一个词对和两个语境。"
+
+3. **每个元素的详细描述**
+   对于每个组件，请说明：
+   - 它是什么
+   - 如何构建
+   - 适用的约束条件
+   - 需要避免的内容
+   - 示例："词对由同一个词的短形式和长形式组成...避免使用固定搭配或常见短语中的词。"
+
+4. **实验条件或变体**
+   说明：
+   - 每个条件的定义
+   - 构建标准
+   - 匹配约束
+   - 示例："支持性语境应该强烈预测缺失的最后一个词...两个语境应该在长度上匹配。"
+
+5. **示例项目**
+   包含至少一个完整的示例，并标注各个部分。
+
+6. **格式指南**
+   注明任何特定的格式或提交要求。
+
+#### 1.5 检查自动生成的属性
+![检查属性](path/to/review_properties.png)
+
+完成实验设计后：
+1. 点击"自动生成属性"按钮
+2. 系统将自动设置：
+   - 验证条件
+   - 评分维度
+3. **重要**：请检查并根据需要调整这些自动生成的属性
+
+### 2. 开始生成
+![开始生成](path/to/start_generation.png)
+
+1. 点击"生成刺激材料"按钮
+2. 实时监控进度
+3. 查看详细日志
+4. 必要时使用"停止"按钮
+
+### 3. 获取结果
+![获取结果](path/to/get_results.png)
+
+- 完成后自动下载 CSV 格式的结果文件
+- 包含生成的刺激材料及其评分
 
 ## 📂 文件结构
 
@@ -385,35 +531,35 @@ python run.py webui
 <details>
 <summary><b>生成过程卡住怎么办？</b></summary>
 <br>
-- 检查网络连接是否正常
-- 点击 "Stop" 按钮停止当前生成
-- 刷新页面重新开始
-- 如果页面长时间无响应，可以等待30秒，系统会自动解除界面锁定
+   - 检查网络连接是否正常
+   - 点击 "Stop" 按钮停止当前生成
+   - 刷新页面重新开始
+   - 如果页面长时间无响应，可以等待30秒，系统会自动解除界面锁定
 </details>
 
 <details>
 <summary><b>WebSocket连接错误如何解决？</b></summary>
 <br>
-- 确保网络环境没有阻止WebSocket连接
-- 如果看到WebSocket错误信息，可以刷新页面重新建立连接
-- 重启服务器或尝试使用不同的浏览器
-- WebSocket连接问题不会影响主要功能，系统有自动恢复机制
+   - 确保网络环境没有阻止WebSocket连接
+   - 如果看到WebSocket错误信息，可以刷新页面重新建立连接
+   - 重启服务器或尝试使用不同的浏览器
+   - WebSocket连接问题不会影响主要功能，系统有自动恢复机制
 </details>
 
 <details>
 <summary><b>如何优化生成质量？</b></summary>
 <br>
-- 提供更多详细的示例
-- 完善实验设计说明
-- 设置合适的验证条件
+   - 提供更多详细的示例
+   - 完善实验设计说明
+   - 设置合适的验证条件
 </details>
 
 <details>
 <summary><b>生成速度较慢怎么处理？</b></summary>
 <br>
-- 考虑减少生成数量
-- 确保网络连接稳定
-- 选择响应更快的模型
+   - 考虑减少生成数量
+   - 确保网络连接稳定
+   - 选择响应更快的模型
 </details>
 
 ## 📞 技术支持

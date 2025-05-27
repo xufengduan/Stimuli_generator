@@ -1,0 +1,27 @@
+# Python virtual environment
+venv/
+
+# Package information
+stimuli_generator.egg-info/
+
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg
+
+# Local development settings
+.env
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log 
