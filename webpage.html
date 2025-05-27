@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stimulus Generator</title>
+    <link rel="icon" href="static/Stimulus Generator Web Logo.png" type="image/png">
+    <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <h1>Stimulus Generator</h1>
+        </div>
+        <h2>Parameter Settings</h2>
+        <div class="pale-blue-section">
+        <p class="instruction-text">Fill in your experiment design and let the model generate customized stimulus materials.</p>
+        <div class="form-group">
+            <div class="label-container">
+                <label for="model_choice">Model</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">Select which language model to use for generation.</span>
+                </div>
+            </div>
+            <select id="model_choice">
+                <option value="">Please choose a model</option>
+                <option value="GPT-4o">GPT-4o</option>
+                <option value="meta-llama/Llama-3.3-70B-Instruct">meta-llama/Llama-3.3-70B-Instruct</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <div class="label-container">
+                <label for="api_key">OpenAI API key</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">You don't need to enter an API key if you select a model other than GPT-4o.</span>
+                </div>
+            </div>
+            <input type="text" id="api_key" placeholder="Enter your OpenAI API Key" disabled>
+        </div>
+        <div class="spacing"></div>
+        <div class="form-group custom-example-group">
+            <div class="label-container">
+                <label>Example stimuli</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">
+                        <strong>### What is this section for?</strong><br>
+                        This section provides <strong>example stimulus items</strong> for the Generator agent to learn from.<br>
+                        - The <strong>left column</strong> (Component) should match the component names you've defined above (e.g. <em>word pair</em>, <em>supportive context</em>, <em>neutral context</em>).<br>
+                        - The <strong>right column</strong> (Content) provides the actual example content for that component.<br>
+                        💡 Each row defines <strong>one component</strong> of the current item.<br>
+                        Click <strong>"Add item"</strong> to create a new example stimulus item with the same components.<br>
+                        ---<br>
+                        <strong>### Example:</strong><br>
+                        <strong>Item 1:</strong><br>
+                        - Component: <code>word pair</code> → Content: <code>TV / television</code><br>
+                        - Component: <code>supportive context</code> → Content: <code>She turned on the TV to watch the news.</code><br>
+                        - Component: <code>neutral context</code> → Content: <code>The TV was next to the window.</code><br>
+                        <strong>Item 2:</strong><br>
+                        ...<br>
+                        📌 You should add at least <strong>2–3 full example items</strong> for best results.
+                    </span>
+                </div>
+            </div>
+            <p class="description-text">Add multiple example items to help the agent learn.</p>
+            
+            <!-- 示例表格容器 -->
+            <div id="items-container">
+                <!-- Item 1 -->
+                <div class="item-container" id="item-1">
+                    <div class="item-title">Item 1</div>
+                    <table class="stimuli-table">
+                <thead>
+                    <tr>
+                        <th class="type-column">Components</th>
+                        <th class="content-column">Content</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="type-column"><input type="text" placeholder="e.g. word pair"></td>
+                        <td class="content-column"><input type="text" placeholder="e.g. math/mathematics"></td>
+                    </tr>
+                </tbody>
+            </table>
+                    <div class="item-buttons-row example-buttons">
+                        <div class="left-buttons">
+                            <button class="add-component-btn">Add component</button>
+                            <button class="delete-component-btn">Delete component</button>
+                        </div>
+                        <div class="right-buttons">
+                            <button class="add-item-btn">Add item</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="label-container">
+                <label for="experiment_design">Stimulus design</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">
+                        <strong>### What is "Stimulus design"?</strong><br>
+                        This field defines the structure and logic of your experimental stimuli.<br>
+                        It helps the model understand what to generate and how to vary conditions.<br>
+                        ---<br>
+                        <strong>### What to include:</strong><br>
+                        ✅ Components<br>
+                        List the elements in each item (e.g. word pair, context sentence, target word)<br>
+                        ✅ Condition manipulation<br>
+                        Describe how the stimuli differ across conditions (e.g. supportive vs neutral)<br>
+                        ✅ Constraints (optional)<br>
+                        Mention any control rules (e.g. sentence length matching)<br>
+                        ---<br>
+                        <strong>### Example:</strong><br>
+                        - A word pair: a short word and its long form (e.g. TV – television)<br>
+                        - Two context sentences:<br>
+                          - Supportive context: strongly predicts the target word (e.g. She watches her favorite shows on the <strong>TV</strong>.)<br>
+                          - Neutral context: does not predict the target word (e.g. She placed the ball next to the <strong>TV</strong>)<br>
+                        Supportive and neutral contexts are matched for sentence length and structure.
+                    </span>
+                </div>
+            </div>
+            <textarea id="experiment_design" placeholder="Describe the structure of each stimulus item:
+- Component 1: ...
+- Component 2: ...
+- Manipulation: ...
+💡 Click the info icon (ℹ️) to see a complete example."></textarea>
+            <!-- 添加"AutoGenerate properties"按钮 -->
+            <div class="button-container-spaced">
+                <button id="auto_generate_button" class="auto-generate-btn">AutoGenerate properties</button>
+            </div>
+        </div>
+        </div>
+        <h2>Agent Property Settings</h2>
+        <div class="pale-blue-section">
+        <div class="form-group">
+            <div class="label-container">
+            <label><i class="fas fa-check-circle agent-icon validator-icon"></i> Validator</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">
+                        <strong>### What is a Validator?</strong><br>
+                        Validators define the <strong>mandatory requirements</strong> that each generated stimulus must meet.<br>
+                        ---<br>
+                        <strong>### How to use:</strong><br>
+                        - In the <strong>Properties</strong> column, define a short label (e.g. <code>IsSynonym</code>, <code>ContainsTargetWord</code>)<br>
+                        - In the <strong>Description</strong>, explain what this constraint means<br>
+                        ---<br>
+                        <strong>### Example:</strong><br>
+                        IsSynonym: Whether the two words in the word pair are synonyms<br>
+                        Predictability: Whether the supportive context can predict target word
+                    </span>
+                </div>
+            </div>
+            <p class="description-text">Define the property name (left) and its validation logic (right). Help the Validator agent to filter out unacceptable items.</p>
+            <table id="agent2PropertiesTable">
+                <thead>
+                    <tr>
+                        <th class="agent_2_properties-column">Properties</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="agent_2_properties-column"><input type="text" placeholder="e.g. Synonym"></td>
+                        <td class="agent_2_description-column"><input type="text" placeholder="e.g. Whether the words in the word pair are synonyms."></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="button-container-spaced">
+                <button id="add_agent_2_property_button">Add Validator's property</button>
+                <button id="delete_agent_2_property_button">Delete Validator's property</button>
+            </div>
+        </div>
+        <div class="spacing"></div>
+        <div class="form-group">
+            <div class="label-container">
+            <label><i class="fas fa-star agent-icon scorer-icon"></i> Scorer</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">
+                        <strong>### What is a Scorer?</strong><br>
+                        Scorers assign <strong>numeric scores</strong> to each generated item based on specific quality dimensions.<br>
+                        These scores can be used to compare, filter, or rank items.<br>
+                        ---<br>
+                        <strong>### What to define:</strong><br>
+                        - <strong>Aspects</strong>: The dimension you're evaluating (e.g. Fluency, Frequency, Informativeness)<br>
+                        - <strong>Description</strong>: What this score represents<br>
+                        - <strong>Min / Max score</strong>: Define the scoring scale (e.g. from 0 to 10)<br>
+                        ---<br>
+                        <strong>### Example:</strong><br>
+                        | Aspect               | Description                                           | Min score | Max score |<br>
+                        |Word Pair Frequency  | How frequently the word pair is used in English      | 0   | 10  |<br>
+                        | Predictability       | How strongly the supportive context predicts the target word     | 0   | 100 |
+                    </span>
+                </div>
+            </div>
+            <p class="description-text">Define the dimensions along which the generated items will be rated.</p>
+            <table id="agent3PropertiesTable">
+                <thead>
+                    <tr>
+                        <th class="agent_3_properties-column">Aspects</th>
+                        <th class="agent_3_description-column">Description</th>
+                        <th class="agent_3_minimum-column">Min score</th>
+                        <th class="agent_3_maximum-column">Max score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="agent_3_properties-column"><input type="text" placeholder="e.g. Word Pair Frequency"></td>
+                        <td class="agent_3_description-column"><input type="text" placeholder="e.g. How frequent the word pair are used in English"></td>
+                        <td class="agent_3_minimum-column"><input type="number" min="0" placeholder="e.g. 0"></td>
+                        <td class="agent_3_maximum-column"><input type="number" min="0" placeholder="e.g. 10"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="button-container-spaced">
+                <button id="add_agent_3_property_button">Add Scorer's aspect</button>
+                <button id="delete_agent_3_property_button">Delete Scorer's aspect</button>
+            </div>
+        </div>
+        </div>
+        <h2>Output</h2>
+        <div class="pale-blue-section">
+        <div class="form-group">
+            <div class="label-container">
+                <label for="iteration">The number of items</label>
+                <div class="tooltip info-icon">
+                    <span class="info-icon-inner">i</span>
+                    <span class="tooltip-text">Positive integer.<br>Rounds of stimulus generation, corresponding to the number of constructed sets of stimuli.</span>
+                </div>
+            </div>
+            <input type="text" id="iteration" placeholder="e.g. 50">
+        </div>
+        <div class="button-container">
+            <button id="generate_button">Generate stimulus</button>
+            <button id="stop_button" disabled>Stop</button>
+            <button id="clear_button">Clear all</button>
+        </div>
+        <div class="generation-status-container">
+            <span id="generation_status" class="generation-status"></span>
+        </div>
+        <div class="progress-section">
+          <div class="label-container">
+            <label>Progress bar</label>
+          </div>
+          <div class="progress-container">
+            <div class="progress-bar" id="progress_bar">
+              <span class="progress-percentage" id="progress_percentage">0%</span>
+            </div>
+          </div>
+        </div>
+        </div>
+        <!-- 新增输出日志区域 -->
+        <h2>Generation Log</h2>
+        <div class="pale-blue-section">
+        <div class="log-container">
+            <div class="log-panel">
+                <div class="log-header">
+                    <i class="fas fa-lightbulb agent-icon generator-icon"></i>
+                    <h3>Generator</h3>
+                </div>
+                <div class="log-content" id="generator-log"></div>
+            </div>
+            
+            <div class="log-panel">
+                <div class="log-header">
+                    <i class="fas fa-check-circle agent-icon validator-icon"></i>
+                    <h3>Validator</h3>
+                </div>
+                <div class="log-content" id="validator-log"></div>
+            </div>
+            
+            <div class="log-panel">
+                <div class="log-header">
+                    <i class="fas fa-star agent-icon scorer-icon"></i>
+                    <h3>Scorer</h3>
+                </div>
+                <div class="log-content" id="scorer-log"></div>
+            </div>
+        </div>
+        </div>
+    </div>
+    <script src="static/script.js"></script>
+</body>
+</html>
