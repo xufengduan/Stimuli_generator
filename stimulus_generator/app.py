@@ -202,6 +202,11 @@ def session_homepage(session_id):
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return send_from_directory(root_dir, 'webpage.html')
 
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return send_from_directory(os.path.join(root_dir, 'static'), filename)
+
 
 @app.route('/<session_id>/generate_stimulus', methods=['POST'])
 def generate_stimulus(session_id):
