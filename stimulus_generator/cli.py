@@ -29,27 +29,14 @@ def main():
         print(f"Starting Stimulus Generator Web interface...")
         print(f"Access http://127.0.0.1:{args.port} to open the Web interface")
         
-        # Import eventlet and patch for better Socket.IO support
-        try:
-            import eventlet
-            eventlet.monkey_patch()
-            print("Using eventlet for better Socket.IO compatibility")
-        except ImportError:
-            print("Warning: eventlet not available, using threading mode")
-        
-        print("WebSocket server configured with:")
-        print("  - Transport: polling only")
-        print("  - WebSocket Upgrades: Disabled")
-        print("  - WSGI-safe mode enabled")
-        
-        # Start the web server with WSGI-safe configuration
+        # Start the web server
         socketio.run(
             app,
             host=args.host,
             port=args.port,
-            debug=False,  # Always disable debug to prevent WSGI issues
-            use_reloader=False,  # Disable reloader to prevent conflicts
-            log_output=False  # Disable logging to prevent buffer issues
+            debug=args.debug,
+            allow_unsafe_werkzeug=True,
+            log_output=args.debug
         )
     else:
         parser.print_help()

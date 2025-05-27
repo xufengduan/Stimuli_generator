@@ -19,16 +19,14 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode="threading",
-    logger=False,  # reduce log output
-    engineio_logger=False,  # reduce engine log output
-    ping_timeout=30,
-    ping_interval=10,
-    transports=['polling'],  # Force polling transport to avoid WebSocket WSGI issues
+    logger=False,
+    engineio_logger=False,
+    ping_timeout=30,  # Reduced timeout
+    ping_interval=10,  # Reduced interval
     http_compression=False,
     manage_session=False,
-    always_connect=False,
-    max_http_buffer_size=512 * 1024,  # Further reduce to 512KB
-    allow_upgrades=False,  # Prevent WebSocket upgrades that cause WSGI issues
+    allow_upgrades=True,  # Allow transport upgrades
+    transports=['polling', 'websocket'],  # Explicit transport order
 )
 
 # Create a session store directory
@@ -142,23 +140,17 @@ def load_session(session_id):
 def websocket_send(session_id, message_type, message):
     """
     Send WebSocket messages to the frontend
-    session_id: session ID
-    message_type: message type (generator, validator, scorer, all, setup)
-    message: the message content to send
     """
     try:
-        # safe check: ensure session_id is valid
         if not session_id:
-            print("Warning: Attempted to send WebSocket message with empty session_id")
             return
             
-        # Truncate long messages to prevent Socket.IO issues
-        if isinstance(message, str) and len(message) > 2000:
-            message_preview = message[:2000] + "... [Message truncated]"
+        # Truncate long messages
+        if isinstance(message, str) and len(message) > 1000:
+            message_preview = message[:1000] + "... [truncated]"
         else:
             message_preview = message
             
-        # build message data
         message_data = {
             'session_id': session_id, 
             'type': message_type, 
@@ -166,20 +158,14 @@ def websocket_send(session_id, message_type, message):
             'timestamp': time.time()
         }
         
-        # Send message in a background task to prevent WSGI conflicts
-        def send_message_task():
-            try:
-                print(f"Sending {message_type} message to session {session_id}")
-                socketio.emit('stimulus_update', message_data, room=session_id)
-            except Exception as emit_error:
-                print(f"Socket.IO emit error: {str(emit_error)}")
-                # Silent fallback - don't retry to avoid cascading errors
-        
-        # Use background task to avoid blocking main thread and WSGI issues
-        socketio.start_background_task(send_message_task)
+        # Send message directly but with error protection
+        try:
+            socketio.emit('stimulus_update', message_data, room=session_id)
+        except Exception as e:
+            print(f"WebSocket send error: {str(e)}")
         
     except Exception as e:
-        print(f"Error preparing WebSocket message: {str(e)}")
+        print(f"Error in websocket_send: {str(e)}")
 
 # health check endpoint, used for cloud service monitoring
 @app.route("/health")
@@ -625,64 +611,60 @@ def download_file(session_id, filename):
 @socketio.on('connect')
 def handle_connect():
     """
-    Handle WebSocket connection event
-    This function is called when a client connects to the WebSocket server
+    Handle WebSocket connection event - simplified to avoid WSGI conflicts
     """
     try:
-        # Get the client's session ID safely
+        # Get basic client info
         client_sid = request.sid if request and hasattr(request, 'sid') else None
-        
-        if not client_sid:
-            print("Warning: Client connected but no SID available")
-            return True  # Allow connection but log warning
-            
-        # Get session_id from request args
         session_id = None
+        
         try:
             if request and hasattr(request, 'args'):
                 session_id = request.args.get('session_id')
-        except Exception as args_error:
-            print(f"Error getting session_id from args: {args_error}")
+        except:
+            pass
         
         print(f'Client connected: {client_sid}, Session ID: {session_id}')
         
-        # If session_id is provided, join the room immediately but safely
-        if session_id:
-            try:
-                # Join room immediately in the main thread to avoid WSGI issues
-                from flask_socketio import join_room
-                join_room(session_id)
-                print(f'Client {client_sid} joined room {session_id}')
-                
-                # Send confirmation in a deferred way to prevent WSGI conflicts
-                def send_confirmation():
-                    try:
-                        socketio.sleep(0.1)  # Brief delay
-                        socketio.emit('server_status', {
-                            'status': 'connected', 
-                            'message': f'Connection established and joined room {session_id}',
-                            'room_joined': True,
-                            'session_id': session_id
-                        }, room=session_id)
-                        print(f'Sent confirmation to room {session_id}')
-                    except Exception as e:
-                        print(f"Error sending confirmation: {e}")
-                
-                # Start confirmation sending as background task
-                socketio.start_background_task(send_confirmation)
-                
-            except Exception as room_error:
-                print(f"Room joining error: {room_error}")
-                # Continue without room joining
-        else:
-            print(f"Client {client_sid} connected without session_id")
-            
-        return True  # Explicitly allow the connection
+        # Do NOT perform any operations that might write to the response here
+        # Just return True to allow the connection
+        return True
         
     except Exception as e:
         print(f"Error in connection handler: {str(e)}")
-        return True  # Still allow connection despite errors
+        return True
 
+
+@socketio.on('join_session')
+def handle_join_session(data):
+    """
+    Handle explicit join session request from client after connection is established
+    """
+    try:
+        client_sid = request.sid if request and hasattr(request, 'sid') else None
+        if not client_sid:
+            return
+            
+        session_id = data.get('session_id') if data else None
+        if not session_id:
+            return
+            
+        # Join room safely after connection is fully established
+        from flask_socketio import join_room
+        join_room(session_id)
+        print(f'Client {client_sid} joined room {session_id}')
+        
+        # Send confirmation
+        socketio.emit('server_status', {
+            'status': 'connected',
+            'message': f'Joined room {session_id}',
+            'room_joined': True,
+            'session_id': session_id
+        }, room=client_sid)
+        print(f'Sent confirmation to client {client_sid}')
+        
+    except Exception as e:
+        print(f"Error in join_session handler: {str(e)}")
 
 @socketio.on('disconnect')
 def handle_disconnect(disconnect_reason=None):
@@ -710,33 +692,19 @@ def handle_ping(data):
     Handle ping messages from clients to keep connections alive
     """
     try:
-        # Get client SID safely
         client_sid = request.sid if request and hasattr(request, 'sid') else None
         if not client_sid:
             return
             
-        # Get session ID if available
-        session_id = None
-        try:
-            if request and hasattr(request, 'args'):
-                session_id = request.args.get('session_id')
-        except:
-            pass
-            
-        # Send pong response in background task to prevent WSGI issues
-        def send_pong():
-            try:
-                response = {
-                    'time': data.get('time', 0) if data else 0,
-                    'server_time': time.time(),
-                    'session_id': session_id
-                }
-                socketio.emit('pong', response, room=client_sid)
-            except Exception as emit_error:
-                print(f"Error sending pong response: {emit_error}")
+        response = {
+            'time': data.get('time', 0) if data else 0,
+            'server_time': time.time()
+        }
         
-        # Use background task for pong response
-        socketio.start_background_task(send_pong)
+        try:
+            socketio.emit('pong', response, room=client_sid)
+        except Exception as e:
+            print(f"Pong error: {str(e)}")
         
     except Exception as e:
         print(f"Error in ping handler: {str(e)}")
@@ -882,22 +850,13 @@ if __name__ == '__main__':
     print("Starting Stimulus Generator server...")
     print("WebSocket server configured with:")
     print(f"  - Async mode: {socketio.async_mode}")
-    print(f"  - Ping interval: 10s")
-    print(f"  - Ping timeout: 30s")
-    print(f"  - Transport: polling only")
+    print(f"  - Ping interval: 25s")
+    print(f"  - Ping timeout: 60s")
     print(f"  - HTTP Compression: Disabled")
     print(f"  - Session Management: Disabled")
-    print(f"  - WebSocket Upgrades: Disabled")
     
     # detect if running in production environment
     is_production = os.environ.get('PRODUCTION', 'false').lower() == 'true'
-    
-    # Import eventlet and patch for better Socket.IO support
-    try:
-        import eventlet
-        eventlet.monkey_patch()
-    except ImportError:
-        print("Warning: eventlet not available, using threading mode")
     
     # choose different configurations based on the environment
     if is_production:
@@ -908,8 +867,7 @@ if __name__ == '__main__':
             host='0.0.0.0',
             port=int(os.environ.get('PORT', 5000)),
             debug=False,
-            log_output=False,
-            use_reloader=False
+            log_output=False
         )
     else:
         # development environment configuration
@@ -918,7 +876,7 @@ if __name__ == '__main__':
             app, 
             host='0.0.0.0',
             port=5000,
-            debug=False,  # Disable debug to prevent WSGI issues
-            use_reloader=False,  # Disable reloader to prevent conflicts
-            log_output=False  # Reduce logging to prevent buffer issues
+            debug=True,
+            allow_unsafe_werkzeug=True,
+            log_output=True
         )

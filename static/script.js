@@ -154,20 +154,16 @@ function initializeSocket() {
     // Create configuration object, add query parameters including session ID
     const socketOptions = {
         path: '/socket.io',
-        transports: ['websocket', 'polling'],  // Prefer WebSocket, fallback to polling
-        reconnectionAttempts: 5,               // Built-in reconnection attempts
-        reconnectionDelay: 1000,               // Initial reconnection delay, milliseconds
-        reconnectionDelayMax: 5000,            // Maximum reconnection delay, milliseconds
-        timeout: 20000,                        // Connection timeout setting, milliseconds
+        transports: ['polling', 'websocket'],  // Start with polling, then upgrade to websocket
+        reconnectionAttempts: 3,               // Reduced reconnection attempts
+        reconnectionDelay: 2000,               // Longer initial delay
+        reconnectionDelayMax: 10000,           // Longer max delay
+        timeout: 10000,                        // Shorter timeout
         forceNew: true,                        // Force new connection
         autoConnect: true,                     // Auto connect
         query: { 'session_id': sessionId },    // Add session ID to query parameters
-        // Reduce packet size to prevent issues
-        maxHttpBufferSize: 1e6,                // 1MB max buffer size
-        // Add additional options to improve stability
         upgrade: true,                         // Allow transport upgrade
-        rememberUpgrade: true,                 // Remember transport upgrade
-        rejectUnauthorized: false              // Accept self-signed certificates
+        rememberUpgrade: false,                // Don't remember upgrade to avoid issues
     };
     
     console.log(`Connecting to Socket.IO: ${currentUrl}, Session ID: ${sessionId}`);
@@ -196,6 +192,16 @@ function initializeSocket() {
             socketReconnectAttempts = 0; // Reset reconnection counter
             socketBackoffDelay = 1000; // Reset backoff delay
             socketConnectionInProgress = false; // Reset connection in progress flag
+            
+            // Join session room after connection is established
+            setTimeout(() => {
+                try {
+                    socket.emit('join_session', { session_id: sessionId });
+                    console.log('Sent join_session request for:', sessionId);
+                } catch (e) {
+                    console.warn("Failed to send join_session:", e);
+                }
+            }, 100);
             
             // Add ping to verify connection is working
             setTimeout(() => {
