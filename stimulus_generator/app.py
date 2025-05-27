@@ -25,20 +25,12 @@ socketio = SocketIO(
     ping_interval=25,
     http_compression=False,
     manage_session=False,
-    always_connect=False,  # prevent early connections during HTTP handshake
-    max_http_buffer_size=1024 * 1024,  # reduce buffer size to 1MB for stability
-    # Client-side reconnection options (these don't affect server)
-    reconnection=True,  # enable reconnection
-    reconnection_attempts=5,  # limit reconnection attempts
-    reconnection_delay=1000,  # start with 1 second delay
-    reconnection_delay_max=5000,  # maximum 5 seconds delay between attempts
-    # Additional stability options
-    transports=['websocket', 'polling'],  # prefer websocket, fallback to polling
-    upgrade=True,  # allow transport upgrades
-    cookie=False,  # disable cookies to prevent session issues
-    # Connection handling options
-    allow_upgrades=True,  # allow protocol upgrades
-    compression=False,  # disable compression to avoid buffer issues
+    always_connect=False,  # prevent automatic connection issues
+    max_http_buffer_size=1024 * 1024,  # reduce buffer size to 1MB to prevent issues
+    # Remove client-side reconnection options as they don't belong in server config
+    transports=['websocket', 'polling'],  # specify allowed transports
+    allow_upgrades=True,  # allow transport upgrades
+    cookie=None  # disable session cookies to prevent conflicts
 )
 
 # Create a session store directory
@@ -163,30 +155,34 @@ def websocket_send(session_id, message_type, message):
             return
             
         # Truncate long messages to prevent Socket.IO issues
-        if isinstance(message, str) and len(message) > 5000:
-            message_preview = message[:5000] + "... [Message too long, truncated]"
+        if isinstance(message, str) and len(message) > 3000:
+            message_preview = message[:3000] + "... [Message truncated for transmission]"
         else:
             message_preview = message
             
-        # build message data
+        # build message data with minimal structure to avoid serialization issues
         message_data = {
-            'session_id': session_id, 
-            'type': message_type, 
-            'message': message_preview,
-            'timestamp': time.time()
+            'session_id': str(session_id), 
+            'type': str(message_type), 
+            'message': str(message_preview),
+            'timestamp': int(time.time())
         }
         
         # use try-except to wrap the emit call to prevent connection issues from causing application crashes
         try:
             print(f"Sending {message_type} message to session {session_id}")
-            socketio.emit('stimulus_update', message_data, namespace='/', room=session_id)
+            # Use background task for emit to avoid blocking and HTTP response issues
+            def emit_task():
+                try:
+                    socketio.emit('stimulus_update', message_data, namespace='/', room=session_id)
+                except Exception as bg_emit_error:
+                    print(f"Background emit error: {str(bg_emit_error)}")
+            
+            # Start emit as background task
+            socketio.start_background_task(emit_task)
         except Exception as emit_error:
-            print(f"Socket.IO emit error: {str(emit_error)}")
-            # try alternative method - send directly to all connections
-            try:
-                socketio.emit('stimulus_update', message_data)
-            except:
-                pass  # if the alternative method also fails, silent handling
+            print(f"Socket.IO emit setup error: {str(emit_error)}")
+            # Don't try alternative methods that might cause more issues
     except Exception as e:
         print(f"Error preparing WebSocket message: {str(e)}")
 
@@ -630,123 +626,153 @@ def download_file(session_id, filename):
         return jsonify({'message': f'Error generating file: {str(e)}'}), 500
 
 
-# WebSocket connection event handler
+# WebSocket initialization event
 @socketio.on('connect')
 def handle_connect():
     """
-    Handle WebSocket connection event with improved error handling
+    Handle WebSocket connection event
     This function is called when a client connects to the WebSocket server
     """
+    # Get client info first, before any potential errors
     client_sid = None
     session_id = None
     
     try:
-        # Get client SID safely - this is critical for proper connection handling
+        # Get the client's session ID safely
         client_sid = request.sid if request and hasattr(request, 'sid') else None
+        
+        # Early return if no SID is available
         if not client_sid:
             print("Warning: Client connected but no SID available")
-            # Return immediately to avoid blocking the HTTP response
-            return True
-        
-        # Get session_id from request args with enhanced error handling
+            return
+            
+        # Safely get session_id from request args
         try:
-            if request and hasattr(request, 'args') and request.args:
+            if request and hasattr(request, 'args'):
                 session_id = request.args.get('session_id')
         except Exception as args_error:
             print(f"Error getting session_id from args: {args_error}")
-            session_id = None
+            # Continue with None session_id
         
         print(f'Client connected: {client_sid}, Session ID: {session_id}')
         
-        # IMPORTANT: Return immediately to complete HTTP handshake
-        # All room operations will be handled asynchronously
-        def delayed_room_operations():
-            try:
-                # Wait for HTTP handshake to complete fully
-                socketio.sleep(1.0)
-                
-                if session_id and client_sid:
+        # If session_id is provided, handle room joining with proper error handling
+        if session_id:
+            # Defer room joining to avoid potential race conditions
+            # This helps prevent the "write() before start_response" error
+            def join_room_task():
+                try:
+                    # Wait longer to ensure connection is fully established
+                    socketio.sleep(0.5)
+                    
+                    # Check if client is still connected before proceeding
+                    if not hasattr(socketio.server, 'get_session') or client_sid not in [s['id'] for s in socketio.server.manager.get_participants('/')]:
+                        print(f'Client {client_sid} disconnected before room joining')
+                        return
+                    
+                    # Join the room
                     try:
-                        # Check if client is still connected before room operations
-                        if client_sid in socketio.server.manager.rooms.get('/', {}):
-                            socketio.server.enter_room(client_sid, session_id, namespace='/')
-                            print(f'Client {client_sid} joined room {session_id}')
-                            
-                            # Additional delay before sending confirmation
-                            socketio.sleep(0.3)
-                            
-                            # Send status update safely
-                            try:
-                                socketio.emit('server_status', {
-                                    'status': 'connected',
-                                    'message': f'Successfully joined room {session_id}',
-                                    'room_joined': True,
-                                    'session_id': session_id
-                                }, room=session_id)
-                                print(f'Sent confirmation to room {session_id}')
-                            except Exception as emit_error:
-                                print(f"Warning: Failed to send room confirmation: {emit_error}")
-                        else:
-                            print(f"Client {client_sid} disconnected before room join could complete")
-                            
+                        from socketio import Server
+                        socketio.server.enter_room(client_sid, session_id, namespace='/')
+                        print(f'Client {client_sid} joined room {session_id}')
+                        
+                        # Wait before sending any messages
+                        socketio.sleep(0.3)
+                        
+                        # Prepare status data
+                        status_data = {
+                            'status': 'connected', 
+                            'message': f'Connection established and joined room {session_id}',
+                            'room_joined': True,
+                            'session_id': session_id
+                        }
+                        
+                        # Try to send confirmation to room with additional error handling
+                        try:
+                            socketio.emit('server_status', status_data, room=session_id, namespace='/')
+                            print(f'Sent confirmation to room {session_id}')
+                        except Exception as emit_error:
+                            print(f"Room emit error: {emit_error}")
+                            # Don't try fallback to prevent further issues
                     except Exception as room_error:
-                        print(f"Room joining failed: {room_error}")
-                        
-                elif session_id is None and client_sid:
-                    # Handle connection without session ID
-                    socketio.sleep(0.3)
-                    try:
-                        socketio.emit('server_status', {
-                            'status': 'connected',
-                            'message': 'Connected without session ID',
-                            'room_joined': False
-                        }, room=client_sid)
-                    except Exception:
-                        pass  # Silent failure for status messages
-                        
-            except Exception as task_error:
-                print(f"Delayed room operations error: {task_error}")
-        
-        # Start background task but don't wait for it
-        socketio.start_background_task(delayed_room_operations)
-        
-        # CRITICAL: Return immediately to complete HTTP handshake
-        return True
-        
+                        print(f"Room joining error: {room_error}")
+                        # Only log error, don't try to send messages that might cause more issues
+                except Exception as task_error:
+                    print(f"Room joining task error: {task_error}")
+            
+            # Start room joining as a background task
+            try:
+                socketio.start_background_task(join_room_task)
+            except Exception as bg_error:
+                print(f"Background task start error: {bg_error}")
+            
+            # Return immediately to complete the connection handshake
+            return
+        else:
+            # Handle case with no session_id
+            print(f"Warning: Client {client_sid} connected without a session_id")
+            # Defer message sending to avoid potential race conditions
+            def send_no_session_message():
+                socketio.sleep(0.2)
+                try:
+                    socketio.emit('server_status', {
+                        'status': 'connected', 
+                        'message': 'Connection established without session ID',
+                        'room_joined': False
+                    }, room=client_sid, namespace='/')
+                except:
+                    pass  # Silently handle failure
+            
+            # Start message sending as a background task
+            socketio.start_background_task(send_no_session_message)
     except Exception as e:
-        print(f"Critical error in connect handler: {str(e)}")
-        # ALWAYS return True to allow connection, preventing HTTP response issues
-        return True
+        print(f"Error in connection handler: {str(e)}")
+        # Try to send error message in a safe way
+        if client_sid:
+            def send_error_message():
+                socketio.sleep(0.2)
+                try:
+                    socketio.emit('server_status', {
+                        'status': 'error', 
+                        'error': str(e)
+                    }, room=client_sid, namespace='/')
+                except:
+                    pass  # Silently handle failure
+            
+            # Start error message sending as a background task
+            socketio.start_background_task(send_error_message)
 
 
 @socketio.on('disconnect')
-def handle_disconnect(reason=None):
+def handle_disconnect(disconnect_data=None):
     """
-    Handle WebSocket disconnection event with minimal processing
+    Handle WebSocket disconnection event
     This function is called when a client disconnects from the WebSocket server
-    
-    Args:
-        reason: Optional parameter that may be passed by Socket.IO indicating disconnect reason
     """
     try:
-        # Get client SID safely with minimal processing
-        client_sid = getattr(request, 'sid', 'unknown') if request else 'unknown'
+        # Get client SID safely
+        client_sid = request.sid if request and hasattr(request, 'sid') else "unknown"
+        print(f'Client disconnected: {client_sid}')
         
-        # Simple logging - avoid complex operations that might block HTTP response
-        if reason:
-            print(f'Client disconnected: {client_sid}, Reason: {reason}')
-        else:
-            print(f'Client disconnected: {client_sid}')
+        # Get session ID if available
+        session_id = None
+        try:
+            if request and hasattr(request, 'args'):
+                session_id = request.args.get('session_id')
+        except:
+            pass
+            
+        if session_id:
+            print(f'Client {client_sid} disconnected from session {session_id}')
         
-        # Socket.IO handles all cleanup automatically
-        # Do NOT perform any emit operations or complex logic here
-        
+        # No need to explicitly leave rooms - Socket.IO does this automatically
+        # But we can add additional cleanup if needed in the future
     except Exception as e:
-        # Minimal error logging to avoid recursion
-        print(f"Disconnect handler error: {str(e)}")
-    
-    # Return None immediately to complete disconnection
-    return None
+        # Just log the error, don't try to send any messages (client is already disconnected)
+        print(f"Error in disconnect handler: {str(e)}")
+        
+    # Return immediately to complete the disconnection process
+    return
 
 @socketio.on('ping')
 def handle_ping(data):
@@ -757,35 +783,31 @@ def handle_ping(data):
         # Get client SID safely
         client_sid = request.sid if request and hasattr(request, 'sid') else None
         if not client_sid:
-            return None
+            return
             
         # Get session ID if available
         session_id = None
         try:
-            if request and hasattr(request, 'args') and request.args:
+            if request and hasattr(request, 'args'):
                 session_id = request.args.get('session_id')
         except:
             pass
             
-        # Send pong response with timeout protection
-        def send_pong():
-            try:
-                response = {
-                    'time': data.get('time', 0) if data else 0,
-                    'server_time': time.time(),
-                    'session_id': session_id
-                }
-                socketio.emit('pong', response, room=client_sid)
-            except Exception as emit_error:
-                print(f"Error sending pong response: {emit_error}")
-        
-        # Use background task to prevent blocking
-        socketio.start_background_task(send_pong)
-        
+        # Send pong response directly to the client
+        try:
+            response = {
+                'time': data.get('time', 0) if data else 0,
+                'server_time': time.time(),
+                'session_id': session_id
+            }
+            socketio.emit('pong', response, room=client_sid)
+        except Exception as emit_error:
+            print(f"Error sending pong response: {emit_error}")
     except Exception as e:
         print(f"Error in ping handler: {str(e)}")
         
-    return None
+    # Return immediately to complete the ping process
+    return
 
 
 # Add session destruction function
@@ -899,46 +921,48 @@ def huggingface_inference():
         return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
 
-# Socket.IO error handlers with minimal processing
+# Add error handlers for Socket.IO
 @socketio.on_error()
-def handle_socketio_error(e):
+def handle_error(e):
     """
     Global error handler for all Socket.IO events
-    Minimal processing to avoid interfering with HTTP responses
+    This function is called when an error occurs during Socket.IO event handling
     """
-    try:
-        # Minimal error logging - avoid complex operations
-        error_msg = str(e)[:200]  # Truncate long error messages
-        print(f"Socket.IO error: {error_msg}")
-        
-        # Log client SID if safely available
-        if request and hasattr(request, 'sid'):
-            print(f"Error client: {request.sid}")
-            
-    except Exception:
-        # Silent handling of nested errors
-        print("Socket.IO error handler: nested error occurred")
+    # Extract useful error information while avoiding potential issues
+    error_msg = str(e) if e else "Unknown Socket.IO error"
+    print(f"Socket.IO error: {error_msg}")
     
-    # Return False to prevent error propagation
-    return False
+    # Avoid any operations that might cause HTTP response issues
+    # Just log and return immediately
+    return False  # Indicate error was handled
 
 @socketio.on_error_default
-def handle_default_socketio_error(e):
+def handle_default_error(e):
     """
     Default error handler for Socket.IO events
-    Minimal processing to avoid interfering with HTTP responses
+    This function is called when an error occurs during Socket.IO event handling
+    and no specific error handler exists
     """
-    try:
-        # Minimal error logging
-        error_msg = str(e)[:200]  # Truncate long error messages
-        print(f"Socket.IO default error: {error_msg}")
-        
-    except Exception:
-        # Silent handling of nested errors
-        print("Socket.IO default error handler: nested error occurred")
+    # Extract useful error information while avoiding potential issues
+    error_msg = str(e) if e else "Unknown Socket.IO default error"
+    print(f"Socket.IO default error: {error_msg}")
     
-    # Return False to prevent error propagation
-    return False
+    # Avoid any operations that might cause HTTP response issues
+    # Just log and return immediately
+    return False  # Indicate error was handled
+
+# Add Flask error handlers to catch HTTP-level issues
+@app.errorhandler(500)
+def handle_internal_error(error):
+    """Handle internal server errors"""
+    print(f"Internal server error: {error}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(404)
+def handle_not_found(error):
+    """Handle not found errors"""
+    print(f"Resource not found: {error}")
+    return jsonify({'error': 'Resource not found'}), 404
 
 # Clean up expired sessions at startup
 cleanup_sessions()
