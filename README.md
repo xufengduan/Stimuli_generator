@@ -14,7 +14,7 @@
 </p>
 
 <div align="center">
-  <a href="#english">English</a> | <a href="#chinese">中文</a>
+  <a href="#english">English</a> | <a href="#chinese" onclick="document.getElementById('chinese-content').open = true;">中文</a>
 </div>
 
 ---
@@ -222,7 +222,9 @@ This project is licensed under the [Apache License 2.0](LICENSE). See the LICENS
 
 ---
 
-<a id="chinese"></a>
+<details id="chinese-content">
+<summary><a id="chinese"></a>中文版本 (Chinese Version)</summary>
+
 ## 📖 项目简介
 
 Stimulus Generator 是一个基于大语言模型的刺激材料生成工具，专门为心理语言学研究设计。它能够根据研究者定义的实验设计和示例，自动生成符合要求的实验刺激材料。该工具采用多代理架构，包含生成器(Generator)、验证器(Validator)和评分器(Scorer)三个代理，确保生成的刺激材料满足实验要求并具有良好的质量。
@@ -422,4 +424,6 @@ python run.py webui
 
 ## 📄 许可证
 
-本项目采用 [Apache License 2.0](LICENSE) 许可证。详见 LICENSE 文件。 
+本项目采用 [Apache License 2.0](LICENSE) 许可证。详见 LICENSE 文件。
+
+</details> 
