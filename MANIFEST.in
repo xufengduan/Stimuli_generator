@@ -3,4 +3,5 @@ include README.md
 include requirements.txt
 include *.py
 include *.html
-recursive-include static * 
+recursive-include static *
+recursive-include stimulus_generator * 

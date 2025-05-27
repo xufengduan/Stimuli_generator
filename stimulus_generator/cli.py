@@ -4,7 +4,7 @@
 import argparse
 import os
 import sys
-from app import app, socketio
+from .app import app, socketio
 
 def main():
     """Main entry point for the CLI."""

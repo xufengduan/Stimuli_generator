@@ -25,7 +25,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "stimulus-generator=cli:main",
+            "stimulus-generator=stimulus_generator.cli:main",
         ],
     },
     package_data={

@@ -109,9 +109,11 @@ stimulus-generator webui --help
 
 ```
 Stimulus-Generator/
-├── app.py                 # Flask 后端服务器
-├── backend.py             # 后端核心功能
-├── cli.py                 # 命令行接口
+├── stimulus_generator/    # 主Python包
+│   ├── __init__.py        # 包初始化文件
+│   ├── app.py             # Flask 后端服务器
+│   ├── backend.py         # 后端核心功能
+│   └── cli.py             # 命令行接口
 ├── run.py                 # 快速启动脚本
 ├── setup.py               # 包安装配置
 ├── static/

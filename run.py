@@ -6,7 +6,7 @@ Quickly start the Stimulus Generator script
 """
 
 import sys
-from cli import main
+from stimulus_generator.cli import main
 
 if __name__ == "__main__":
     # if no argument is provided, default to starting the web interface

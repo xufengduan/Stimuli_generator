@@ -6,7 +6,7 @@ import os
 import pickle
 from threading import Event, Thread, Lock
 from multiprocessing import Value
-from backend import generate_stimuli
+from .backend import generate_stimuli
 from collections import defaultdict
 import io
 from flask_socketio import SocketIO, emit
@@ -30,7 +30,7 @@ socketio = SocketIO(
 )
 
 # Create a session store directory
-SESSION_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sessions')
+SESSION_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sessions')
 if not os.path.exists(SESSION_DIR):
     os.makedirs(SESSION_DIR)
 
@@ -199,7 +199,8 @@ def homepage():
 @app.route("/<session_id>")
 def session_homepage(session_id):
     # Return the homepage HTML
-    return send_from_directory('./', 'webpage.html')
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return send_from_directory(root_dir, 'webpage.html')
 
 
 @app.route('/<session_id>/generate_stimulus', methods=['POST'])
@@ -768,7 +769,7 @@ def huggingface_inference():
         from huggingface_hub import InferenceClient
         
         # Import the API key from backend.py
-        from backend import HF_API_KEY
+        from .backend import HF_API_KEY
         
         # Create the client
         client = InferenceClient(
