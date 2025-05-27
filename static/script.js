@@ -155,33 +155,61 @@ function initializeSocket() {
     const socketOptions = {
         path: '/socket.io',
         transports: ['websocket', 'polling'],  // Prefer WebSocket, fallback to polling
-        reconnectionAttempts: 5,               // Reduce built-in reconnection attempts, we'll handle manually
+        reconnectionAttempts: 5,               // Built-in reconnection attempts
         reconnectionDelay: 1000,               // Initial reconnection delay, milliseconds
         reconnectionDelayMax: 5000,            // Maximum reconnection delay, milliseconds
         timeout: 20000,                        // Connection timeout setting, milliseconds
         forceNew: true,                        // Force new connection
         autoConnect: true,                     // Auto connect
-        query: { 'session_id': sessionId }     // Add session ID to query parameters
+        query: { 'session_id': sessionId },    // Add session ID to query parameters
+        // Reduce packet size to prevent issues
+        maxHttpBufferSize: 1e6,                // 1MB max buffer size
+        // Add additional options to improve stability
+        upgrade: true,                         // Allow transport upgrade
+        rememberUpgrade: true,                 // Remember transport upgrade
+        rejectUnauthorized: false              // Accept self-signed certificates
     };
     
     console.log(`Connecting to Socket.IO: ${currentUrl}, Session ID: ${sessionId}`);
     
     try {
-    // Create Socket.IO connection
-    socket = io(currentUrl, socketOptions);
-    
-    // Connection event handling
-    socket.on('connect', () => {
+        // Create Socket.IO connection with error handling
+        socket = io(currentUrl, socketOptions);
+        
+        // Add a timeout to detect connection issues
+        const connectionTimeout = setTimeout(() => {
+            if (!socket.connected) {
+                console.warn("Socket.IO connection timeout after 10 seconds");
+                // Force connection status update
+                socketConnectionInProgress = false;
+                handleReconnect();
+            }
+        }, 10000);
+        
+        // Connection event handling
+        socket.on('connect', () => {
+            // Clear connection timeout
+            clearTimeout(connectionTimeout);
+            
             console.log('WebSocket connection successful!', socket.id);
-        socketInitialized = true; // Set initialization complete flag
-        socketReconnectAttempts = 0; // Reset reconnection counter
+            socketInitialized = true; // Set initialization complete flag
+            socketReconnectAttempts = 0; // Reset reconnection counter
             socketBackoffDelay = 1000; // Reset backoff delay
             socketConnectionInProgress = false; // Reset connection in progress flag
-    });
-    
-    socket.on('connect_error', (error) => {
+            
+            // Add ping to verify connection is working
+            setTimeout(() => {
+                try {
+                    socket.emit('ping', { time: Date.now() });
+                } catch (e) {
+                    console.warn("Failed to send ping after connect:", e);
+                }
+            }, 1000);
+        });
+        
+        socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
-        socketInitialized = false; // Reset flag on connection error
+            socketInitialized = false; // Reset flag on connection error
             socketConnectionInProgress = false; // Reset connection in progress flag
             
             // Use exponential backoff strategy for reconnection
@@ -191,40 +219,40 @@ function initializeSocket() {
         socket.on('error', (error) => {
             console.error('WebSocket error:', error);
             socketConnectionInProgress = false; // Reset connection in progress flag
-    });
-    
-    socket.on('disconnect', (reason) => {
+        });
+        
+        socket.on('disconnect', (reason) => {
             console.log(`WebSocket disconnected: ${reason}`);
-        socketInitialized = false; // Reset flag on disconnection
+            socketInitialized = false; // Reset flag on disconnection
             socketConnectionInProgress = false; // Reset connection in progress flag
             
             // If disconnection reason is not client-initiated, try to reconnect
-            if (reason !== 'io client disconnect') {
+            if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
                 // Use exponential backoff strategy for reconnection
                 handleReconnect();
             }
-    });
-    
-    socket.on('reconnect_attempt', (attemptNumber) => {
+        });
+        
+        socket.on('reconnect_attempt', (attemptNumber) => {
             console.log(`Attempting reconnection (${attemptNumber})...`);
-        socketReconnectAttempts = attemptNumber;
-    });
-    
-    socket.on('reconnect', (attemptNumber) => {
+            socketReconnectAttempts = attemptNumber;
+        });
+        
+        socket.on('reconnect', (attemptNumber) => {
             console.log(`Reconnection successful, attempts: ${attemptNumber}`);
-        socketInitialized = true; // Restore flag on successful reconnection
-        socketReconnectAttempts = 0; // Reset reconnection counter
+            socketInitialized = true; // Restore flag on successful reconnection
+            socketReconnectAttempts = 0; // Reset reconnection counter
             socketBackoffDelay = 1000; // Reset backoff delay
-    });
-    
-    socket.on('reconnect_failed', () => {
+        });
+        
+        socket.on('reconnect_failed', () => {
             console.error('WebSocket reconnection failed after maximum attempts');
-        socketInitialized = false; // Reset flag on reconnection failure
+            socketInitialized = false; // Reset flag on reconnection failure
             socketConnectionInProgress = false; // Reset connection in progress flag
             
             // Use our own reconnection strategy
             handleReconnect();
-    });
+        });
 
     // Listen for progress_update event, update progress bar
     socket.on('progress_update', (data) => {
@@ -248,6 +276,23 @@ function initializeSocket() {
             // Handle server status messages
         });
         
+        // Add ping/pong handler for connection monitoring
+        socket.on('pong', (data) => {
+            const roundTripTime = Date.now() - (data.time || 0);
+            console.log(`Received pong response, round-trip time: ${roundTripTime}ms`);
+            
+            // Schedule next ping to keep connection alive
+            setTimeout(() => {
+                if (socket && socket.connected) {
+                    try {
+                        socket.emit('ping', { time: Date.now() });
+                    } catch (e) {
+                        console.warn("Failed to send ping:", e);
+                    }
+                }
+            }, 30000); // Send ping every 30 seconds
+        });
+        
     } catch (e) {
         console.error("Error creating WebSocket connection:", e);
         socketConnectionInProgress = false; // Reset connection in progress flag
@@ -259,25 +304,62 @@ function initializeSocket() {
 
 // Add exponential backoff reconnection handler
 function handleReconnect() {
+    // Clear any existing reconnection timer
     if (socketReconnectTimer) {
         clearTimeout(socketReconnectTimer);
+        socketReconnectTimer = null;
     }
     
+    // Increment reconnection attempts counter
     socketReconnectAttempts++;
     
+    // Check if we've reached the maximum number of attempts
     if (socketReconnectAttempts > maxReconnectAttempts) {
         console.error(`Maximum reconnection attempts (${maxReconnectAttempts}) reached, stopping`);
+        // Show a user-friendly message in the UI
+        appendLogMessage(generatorLog, "WebSocket connection lost. Please refresh the page.", "error");
+        appendLogMessage(validatorLog, "WebSocket connection lost. Please refresh the page.", "error");
+        appendLogMessage(scorerLog, "WebSocket connection lost. Please refresh the page.", "error");
         return;
     }
     
-    // Use exponential backoff delay
-    const delay = Math.min(socketBackoffDelay * Math.pow(1.5, socketReconnectAttempts - 1), maxBackoffDelay);
-    console.log(`Scheduling reconnection attempt ${socketReconnectAttempts} in ${delay}ms`);
+    // Calculate exponential backoff delay with jitter
+    // Add random jitter (±20%) to prevent reconnection storms
+    const jitterFactor = 0.8 + (Math.random() * 0.4); // Random value between 0.8 and 1.2
+    const baseDelay = socketBackoffDelay * Math.pow(1.5, socketReconnectAttempts - 1);
+    const delay = Math.min(baseDelay * jitterFactor, maxBackoffDelay);
     
+    console.log(`Scheduling reconnection attempt ${socketReconnectAttempts} in ${Math.round(delay)}ms`);
+    
+    // Set a timer for the next reconnection attempt
     socketReconnectTimer = setTimeout(() => {
         console.log(`Executing reconnection attempt ${socketReconnectAttempts}`);
-        socketConnectionInProgress = false; // Ensure new connection can be made
-        initializeSocket();
+        
+        // Reset connection flag to allow a new connection attempt
+        socketConnectionInProgress = false;
+        
+        // Try to reconnect
+        try {
+            // For later reconnection attempts, try to recreate the socket from scratch
+            if (socketReconnectAttempts > 2 && socket) {
+                try {
+                    // Force close and cleanup
+                    socket.close();
+                    socket.disconnect();
+                    socket = null;
+                } catch (e) {
+                    console.warn("Error during socket cleanup:", e);
+                }
+            }
+            
+            // Initialize a new socket connection
+            initializeSocket();
+        } catch (e) {
+            console.error("Error during reconnection:", e);
+            // If reconnection fails, schedule another attempt
+            socketConnectionInProgress = false;
+            handleReconnect();
+        }
     }, delay);
 }
 

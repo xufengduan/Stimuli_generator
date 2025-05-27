@@ -662,7 +662,8 @@ def generate_stimuli(settings):
                     unique_id = ''.join(random.choice('0123456789abcdef') for _ in range(6))
                     suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}_error.csv"
                     
-                    # Add metadata columns to identify generation time and iteration count
+                    # Add metadata columns for internal tracking purposes
+                    # These will be removed before final download to the user
                     df['generation_timestamp'] = timestamp
                     df['batch_id'] = unique_id
                     df['total_iterations'] = total_iter_value
@@ -727,7 +728,8 @@ def generate_stimuli(settings):
                 unique_id = ''.join(random.choice('0123456789abcdef') for _ in range(6))
                 suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
                 
-                # Add metadata columns to identify generation time and iteration count
+                # Add metadata columns to internal dataframe for tracking purposes
+                # These will be removed before final download to the user
                 temp_df['generation_timestamp'] = timestamp
                 temp_df['batch_id'] = unique_id
                 temp_df['total_iterations'] = total_iter_value
@@ -755,7 +757,8 @@ def generate_stimuli(settings):
                 unique_id = ''.join(random.choice('0123456789abcdef') for _ in range(6))
                 suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}_error.csv"
                 
-                # Add metadata columns to identify generation time and iteration count
+                # Add metadata columns for internal tracking purposes
+                # These will be removed before final download to the user
                 df['generation_timestamp'] = timestamp
                 df['batch_id'] = unique_id
                 df['total_iterations'] = total_iter_value
@@ -778,7 +781,8 @@ def generate_stimuli(settings):
             unique_id = ''.join(random.choice('0123456789abcdef') for _ in range(6))
             suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
             
-            # Add metadata columns to identify generation time and iteration count
+            # Add metadata columns for internal tracking purposes
+            # These will be removed before final download to the user
             df['generation_timestamp'] = timestamp
             df['batch_id'] = unique_id
             df['total_iterations'] = total_iter_value
@@ -808,7 +812,8 @@ def generate_stimuli(settings):
         # Remove _error suffix, this is normal completion
         suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
         
-        # Add metadata columns to identify generation time and iteration count
+        # Add metadata columns for internal tracking purposes
+        # These will be removed before final download to the user
         df['generation_timestamp'] = timestamp
         df['batch_id'] = unique_id
         df['total_iterations'] = total_iter_value
