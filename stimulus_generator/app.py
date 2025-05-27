@@ -21,13 +21,14 @@ socketio = SocketIO(
     async_mode="threading",
     logger=False,  # reduce log output
     engineio_logger=False,  # reduce engine log output
-    ping_timeout=60,
-    ping_interval=25,
+    ping_timeout=30,
+    ping_interval=10,
+    transports=['polling'],  # Force polling transport to avoid WebSocket WSGI issues
     http_compression=False,
     manage_session=False,
-    always_connect=False,  # prevent auto reconnection issues
-    max_http_buffer_size=1 * 1024 * 1024,  # reduce buffer size to 1MB to prevent WSGI issues
-    # Remove client-side reconnection settings as they belong to client config
+    always_connect=False,
+    max_http_buffer_size=512 * 1024,  # Further reduce to 512KB
+    allow_upgrades=False,  # Prevent WebSocket upgrades that cause WSGI issues
 )
 
 # Create a session store directory
@@ -881,13 +882,22 @@ if __name__ == '__main__':
     print("Starting Stimulus Generator server...")
     print("WebSocket server configured with:")
     print(f"  - Async mode: {socketio.async_mode}")
-    print(f"  - Ping interval: 25s")
-    print(f"  - Ping timeout: 60s")
+    print(f"  - Ping interval: 10s")
+    print(f"  - Ping timeout: 30s")
+    print(f"  - Transport: polling only")
     print(f"  - HTTP Compression: Disabled")
     print(f"  - Session Management: Disabled")
+    print(f"  - WebSocket Upgrades: Disabled")
     
     # detect if running in production environment
     is_production = os.environ.get('PRODUCTION', 'false').lower() == 'true'
+    
+    # Import eventlet and patch for better Socket.IO support
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except ImportError:
+        print("Warning: eventlet not available, using threading mode")
     
     # choose different configurations based on the environment
     if is_production:
@@ -898,7 +908,8 @@ if __name__ == '__main__':
             host='0.0.0.0',
             port=int(os.environ.get('PORT', 5000)),
             debug=False,
-            log_output=False
+            log_output=False,
+            use_reloader=False
         )
     else:
         # development environment configuration
@@ -907,7 +918,7 @@ if __name__ == '__main__':
             app, 
             host='0.0.0.0',
             port=5000,
-            debug=True,
-            allow_unsafe_werkzeug=True,
-            log_output=True
+            debug=False,  # Disable debug to prevent WSGI issues
+            use_reloader=False,  # Disable reloader to prevent conflicts
+            log_output=False  # Reduce logging to prevent buffer issues
         )
