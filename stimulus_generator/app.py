@@ -6,14 +6,15 @@ import os
 import pickle
 from threading import Event, Thread, Lock
 from multiprocessing import Value
-from .backend import generate_stimuli
+from .backend import generate_stimuli, chutesai_inference_handler
 from collections import defaultdict
 import io
 from flask_socketio import SocketIO, emit
 import time
 
 
-app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static'))
+app = Flask(__name__, static_folder=os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static'))
 CORS(app)
 socketio = SocketIO(
     app,
@@ -30,7 +31,8 @@ socketio = SocketIO(
 )
 
 # Create a session store directory
-SESSION_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sessions')
+SESSION_DIR = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), 'sessions')
 if not os.path.exists(SESSION_DIR):
     os.makedirs(SESSION_DIR)
 
@@ -40,10 +42,14 @@ active_sessions = {}
 sessions_lock = Lock()
 
 # Get the session file path
+
+
 def get_session_file(session_id):
     return os.path.join(SESSION_DIR, f"{session_id}.pkl")
 
 # Save the session state to a file
+
+
 def save_session(session_id, session_state):
     # Create a serializable session state copy
     serializable_state = {
@@ -51,17 +57,19 @@ def save_session(session_id, session_state):
         'error_message': session_state['error_message'],
         'current_iteration_value': session_state['current_iteration'].value,
         'total_iterations_value': session_state['total_iterations'].value,
-        'stop_event_is_set': session_state['stop_event'].is_set(),  # Save stop_event state
+        # Save stop_event state
+        'stop_event_is_set': session_state['stop_event'].is_set(),
     }
-    
+
     # If there is a dataframe and it is not None, convert it to a CSV string and save it
     if session_state.get('dataframe') is not None:
         try:
             csv_data = session_state['dataframe'].to_csv(index=False)
             serializable_state['dataframe_csv'] = csv_data
         except Exception as e:
-            print(f"Error serializing dataframe for session {session_id}: {str(e)}")
-    
+            print(
+                f"Error serializing dataframe for session {session_id}: {str(e)}")
+
     try:
         with open(get_session_file(session_id), 'wb') as f:
             pickle.dump(serializable_state, f)
@@ -69,67 +77,79 @@ def save_session(session_id, session_state):
         print(f"Error saving session {session_id}: {str(e)}")
 
 # Create a new session state
+
+
 def create_session_state():
     state = {
         'stop_event': Event(),  # Control the generation interrupt event
         'generation_file': None,  # Store the generated file path
         'error_message': None,  # Store the error message
-        'current_iteration': Value('i', 0),  # Shared variable, used to store the current iteration count
-        'total_iterations': Value('i', 1),  # Shared variable, used to store the total iteration count
+        # Shared variable, used to store the current iteration count
+        'current_iteration': Value('i', 0),
+        # Shared variable, used to store the total iteration count
+        'total_iterations': Value('i', 1),
         'generation_thread': None,  # Store the generation thread
         'dataframe': None  # Reset the dataframe
     }
     return state
 
 # Load the session state from a file or use the state in the global dictionary
+
+
 def load_session(session_id):
     # First check if there is an active session in the global dictionary
     with sessions_lock:
         if session_id in active_sessions:
             return active_sessions[session_id]
-    
+
     # If there is no active session in the global dictionary, try to load it from the file
     try:
         session_file = get_session_file(session_id)
         if os.path.exists(session_file):
             with open(session_file, 'rb') as f:
                 serialized_state = pickle.load(f)
-                
+
             # Create a complete session state
             session_state = create_session_state()
-            session_state['generation_file'] = serialized_state.get('generation_file')
-            session_state['error_message'] = serialized_state.get('error_message')
-            
+            session_state['generation_file'] = serialized_state.get(
+                'generation_file')
+            session_state['error_message'] = serialized_state.get(
+                'error_message')
+
             with session_state['current_iteration'].get_lock():
-                session_state['current_iteration'].value = serialized_state.get('current_iteration_value', 0)
-            
+                session_state['current_iteration'].value = serialized_state.get(
+                    'current_iteration_value', 0)
+
             with session_state['total_iterations'].get_lock():
-                session_state['total_iterations'].value = serialized_state.get('total_iterations_value', 1)
-            
+                session_state['total_iterations'].value = serialized_state.get(
+                    'total_iterations_value', 1)
+
             # Restore the stop_event state
             if serialized_state.get('stop_event_is_set', False):
                 session_state['stop_event'].set()
             else:
                 session_state['stop_event'].clear()
-                
+
             # Restore the dataframe (if it exists)
             if 'dataframe_csv' in serialized_state and serialized_state['dataframe_csv']:
                 try:
                     import pandas as pd
                     import io
                     csv_data = serialized_state['dataframe_csv']
-                    session_state['dataframe'] = pd.read_csv(io.StringIO(csv_data))
+                    session_state['dataframe'] = pd.read_csv(
+                        io.StringIO(csv_data))
                 except Exception as e:
-                    print(f"Error deserializing dataframe for session {session_id}: {str(e)}")
-            
+                    print(
+                        f"Error deserializing dataframe for session {session_id}: {str(e)}")
+
             # Add the loaded session state to the global dictionary
             with sessions_lock:
                 active_sessions[session_id] = session_state
-                
+
             return session_state
     except Exception as e:
         print(f"Error loading session {session_id}: {str(e)}")
-    
+
     # If loading fails, return a new session state and add it to the global dictionary
     session_state = create_session_state()
     with sessions_lock:
@@ -137,6 +157,8 @@ def load_session(session_id):
     return session_state
 
 # WebSocket callback function, used to send messages to the frontend
+
+
 def websocket_send(session_id, message_type, message):
     """
     Send WebSocket messages to the frontend
@@ -144,30 +166,32 @@ def websocket_send(session_id, message_type, message):
     try:
         if not session_id:
             return
-            
+
         # Truncate long messages
         if isinstance(message, str) and len(message) > 1000:
             message_preview = message[:1000] + "... [truncated]"
         else:
             message_preview = message
-            
+
         message_data = {
-            'session_id': session_id, 
-            'type': message_type, 
+            'session_id': session_id,
+            'type': message_type,
             'message': message_preview,
             'timestamp': time.time()
         }
-        
+
         # Send message directly but with error protection
         try:
             socketio.emit('stimulus_update', message_data, room=session_id)
         except Exception as e:
             print(f"WebSocket send error: {str(e)}")
-        
+
     except Exception as e:
         print(f"Error in websocket_send: {str(e)}")
 
 # health check endpoint, used for cloud service monitoring
+
+
 @app.route("/health")
 def health_check():
     return jsonify({
@@ -176,6 +200,7 @@ def health_check():
         "version": "1.0.0",
         "service": "stimulus-generator"
     })
+
 
 @app.route("/")
 def homepage():
@@ -191,6 +216,7 @@ def session_homepage(session_id):
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return send_from_directory(root_dir, 'webpage.html')
 
+
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -202,12 +228,13 @@ def generate_stimulus(session_id):
     try:
         # Load or create the session state
         session_state = load_session(session_id)
-        
+
         # Ensure the previous state is thoroughly cleaned
         with sessions_lock:
             if session_id in active_sessions:
-                print(f"Session {session_id} - Thoroughly cleaning previous state before new generation")
-                
+                print(
+                    f"Session {session_id} - Thoroughly cleaning previous state before new generation")
+
                 # Stop any running threads
                 session_state['stop_event'].set()
                 if session_state['generation_thread'] and session_state['generation_thread'].is_alive():
@@ -215,42 +242,48 @@ def generate_stimulus(session_id):
                         # Try to wait for the thread to end, but not too long
                         session_state['generation_thread'].join(timeout=0.5)
                     except Exception as e:
-                        print(f"Session {session_id} - Error joining previous thread: {str(e)}")
-                
+                        print(
+                            f"Session {session_id} - Error joining previous thread: {str(e)}")
+
                 # Reset all states
-                session_state['stop_event'].clear()  # Clear the previous stop signal
-                session_state['generation_file'] = None  # Reset the generated file path
-                session_state['error_message'] = None  # Clear the error message before each generation
+                # Clear the previous stop signal
+                session_state['stop_event'].clear()
+                # Reset the generated file path
+                session_state['generation_file'] = None
+                # Clear the error message before each generation
+                session_state['error_message'] = None
                 session_state['dataframe'] = None  # Reset the dataframe
-                session_state['generation_thread'] = None  # Clear the old thread reference
+                # Clear the old thread reference
+                session_state['generation_thread'] = None
 
                 # Ensure the current iteration count is reset to zero
                 with session_state['current_iteration'].get_lock():
                     session_state['current_iteration'].value = 0
-                
+
                 # Save the cleared state, ensuring persistence
                 save_session(session_id, session_state)
-        
+
         data = request.get_json()
         if not data:
             error_msg = "Missing request data"
             return jsonify({'status': 'error', 'message': error_msg}), 400
-            
+
         # Record more detailed request information, including the iteration count
         iteration_count = data.get('iteration', 'unknown')
-        print(f"Session {session_id} - Starting new generation with {iteration_count} iterations.")
+        print(
+            f"Session {session_id} - Starting new generation with {iteration_count} iterations.")
 
         # Create a WebSocket callback function for the current session
         def session_websocket_callback(message_type, message):
             websocket_send(session_id, message_type, message)
-            
+
         # Verify that the necessary parameters exist
         required_fields = ['experimentDesign', 'iteration']
         for field in required_fields:
             if field not in data:
                 error_msg = f"Missing required field: {field}"
                 return jsonify({'status': 'error', 'message': error_msg}), 400
-                
+
         # Verify that the iteration count is a positive integer
         try:
             iteration = int(data['iteration'])
@@ -279,7 +312,7 @@ def generate_stimulus(session_id):
             'session_id': session_id,
             'websocket_callback': session_websocket_callback,
         }
-        
+
         # Initialize the total iteration count
         with session_state['total_iterations'].get_lock():
             session_state['total_iterations'].value = settings['iteration']
@@ -294,13 +327,15 @@ def generate_stimulus(session_id):
             with session_state['current_iteration'].get_lock(), session_state['total_iterations'].get_lock():
                 # Ensure a valid denominator (not 0)
                 denominator = max(1, session_state['total_iterations'].value)
-                progress = (session_state['current_iteration'].value / denominator) * 100
+                progress = (
+                    session_state['current_iteration'].value / denominator) * 100
                 # Avoid floating point precision issues causing abnormal progress display
                 progress = min(100, max(0, progress))
                 # Ensure the progress is an integer value, avoiding small numbers on the frontend
                 progress = int(round(progress))
-                
-            print(f"Session {session_id} updated - Progress: {progress}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}")
+
+            print(
+                f"Session {session_id} updated - Progress: {progress}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}")
             # Send the progress update through WebSocket
             try:
                 socketio.emit('progress_update', {
@@ -310,29 +345,33 @@ def generate_stimulus(session_id):
                 }, namespace='/', room=session_id)
             except Exception as e:
                 print(f"Error sending progress update: {str(e)}")
-        
+
         # Add the callback function to settings
         settings['session_update_callback'] = update_session_callback
 
         def run_generation():
             try:
                 # Send the start generation message
-                websocket_send(session_id, 'all', "Starting generation process...")
-                
+                websocket_send(session_id, 'all',
+                               "Starting generation process...")
+
                 # Check if there is a stop signal
                 if session_state['stop_event'].is_set():
-                    print(f"Session {session_id} - Stop detected before generation start.")
-                    websocket_send(session_id, 'all', "Generation stopped before it started.")
+                    print(
+                        f"Session {session_id} - Stop detected before generation start.")
+                    websocket_send(session_id, 'all',
+                                   "Generation stopped before it started.")
                     return
-                    
+
                 # Generate data
                 df, filename = generate_stimuli(settings)
-                
+
                 # Check if there is a stop signal again
                 if session_state['stop_event'].is_set():
-                    print(f"Session {session_id} - Stop detected after generation completed.")
+                    print(
+                        f"Session {session_id} - Stop detected after generation completed.")
                     return
-                    
+
                 # Verify the returned results
                 if df is None or filename is None:
                     error_msg = "Generation process returned None for dataframe or filename"
@@ -341,48 +380,57 @@ def generate_stimulus(session_id):
                     session_state['generation_file'] = None
                     websocket_send(session_id, 'error', error_msg)
                     return
-                    
+
                 # Verify the number of generated stimuli
                 if len(df) != settings['iteration']:
                     warning_msg = f"Warning: Expected {settings['iteration']} stimuli but got {len(df)}"
                     print(f"Session {session_id} - {warning_msg}")
                     websocket_send(session_id, 'all', warning_msg)
-                
+
                 # Force using a new timestamp, ensuring the file name is unique
                 import time
                 timestamp = int(time.time())
                 updated_filename = f"experiment_stimuli_results_{session_id}_{timestamp}.csv"
-                
+
                 # Ensure the generated dataframe is new and contains complete data
-                print(f"Session {session_id} - Received dataframe with {len(df)} rows from generate_stimuli")
-                
+                print(
+                    f"Session {session_id} - Received dataframe with {len(df)} rows from generate_stimuli")
+
                 # Lock the session access to ensure thread safety
                 with sessions_lock:
                     if session_id in active_sessions:
                         # Clear the old dataframe and file information
-                        print(f"Session {session_id} - Cleaning up old dataframe and file information")
+                        print(
+                            f"Session {session_id} - Cleaning up old dataframe and file information")
                         session_state['dataframe'] = None
                         session_state['generation_file'] = None
-                        
+
                         # Force saving the empty state, ensuring old data is cleared
                         save_session(session_id, session_state)
-                        
+
                         # Then set the new data
-                        session_state['dataframe'] = df.copy()  # Use deep copy, ensuring data is not shared
-                        session_state['generation_file'] = updated_filename  # Use the newly generated file name
-                        
+                        # Use deep copy, ensuring data is not shared
+                        session_state['dataframe'] = df.copy()
+                        # Use the newly generated file name
+                        session_state['generation_file'] = updated_filename
+
                         # Record the successful completion
-                        print(f"Session {session_id} - Generation completed successfully. New file: {updated_filename}, Stimuli count: {len(df)}")
-                        websocket_send(session_id, 'all', f"Generation completed. Generated {len(df)} stimuli.")
-                        
+                        print(
+                            f"Session {session_id} - Generation completed successfully. New file: {updated_filename}, Stimuli count: {len(df)}")
+                        websocket_send(
+                            session_id, 'all', f"Generation completed. Generated {len(df)} stimuli.")
+
                         # Save the updated session state
                         save_session(session_id, session_state)
                     else:
-                        print(f"Session {session_id} - Warning: Session no longer active, cannot update state")
+                        print(
+                            f"Session {session_id} - Warning: Session no longer active, cannot update state")
                         return
             except Exception as e:
-                session_state['error_message'] = str(e)  # Record the error message
-                print(f"Session {session_id} - Error during generation:", str(e))
+                session_state['error_message'] = str(
+                    e)  # Record the error message
+                print(
+                    f"Session {session_id} - Error during generation:", str(e))
                 # Send the error message through WebSocket
                 websocket_send(session_id, 'error', str(e))
                 # Save the updated session state
@@ -390,11 +438,12 @@ def generate_stimulus(session_id):
 
         # Create and start the generation thread
         session_state['generation_thread'] = Thread(target=run_generation)
-        session_state['generation_thread'].daemon = True  # Set as a daemon thread
+        # Set as a daemon thread
+        session_state['generation_thread'].daemon = True
         session_state['generation_thread'].start()
 
         return jsonify({
-            'status': 'success', 
+            'status': 'success',
             'message': 'Stimulus generation started.',
             'session_id': session_id,
             'total_iterations': settings['iteration']
@@ -410,34 +459,40 @@ def generation_status(session_id):
     with sessions_lock:
         if session_id in active_sessions:
             session_state = active_sessions[session_id]
-            
+
             # First check stop_event
             if session_state['stop_event'].is_set():
-                print(f"Session {session_id} - Generation stopped by user (in-memory check).")
+                print(
+                    f"Session {session_id} - Generation stopped by user (in-memory check).")
                 # Send additional WebSocket notification
-                websocket_send(session_id, 'all', "Generation stopped by user.")
+                websocket_send(session_id, 'all',
+                               "Generation stopped by user.")
                 # Clear the generation file field, ensuring that the previous file is not returned
                 session_state['generation_file'] = None
                 save_session(session_id, session_state)
                 return jsonify({'status': 'stopped'})
-                
+
             if session_state['error_message']:
                 return jsonify({'status': 'error', 'error_message': session_state['error_message']})
-            
+
             with session_state['current_iteration'].get_lock(), session_state['total_iterations'].get_lock():
                 # Check if the thread is still running
-                thread_running = session_state['generation_thread'] and session_state['generation_thread'].is_alive()
-                
+                thread_running = session_state['generation_thread'] and session_state['generation_thread'].is_alive(
+                )
+
                 # Get the current progress
-                progress = (session_state['current_iteration'].value / session_state['total_iterations'].value) * 100
-                progress = min(100, max(0, progress))  # Ensure the progress is within 0-100 range
-                print(f"Session {session_id} - Progress: {progress:.2f}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}, Thread running: {thread_running}")
-                
+                progress = (session_state['current_iteration'].value /
+                            session_state['total_iterations'].value) * 100
+                # Ensure the progress is within 0-100 range
+                progress = min(100, max(0, progress))
+                print(
+                    f"Session {session_id} - Progress: {progress:.2f}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}, Thread running: {thread_running}")
+
                 # Only when the iteration is complete, the file is generated, and the generation thread is completed, it is truly completed
-                if (session_state['current_iteration'].value == session_state['total_iterations'].value 
-                        and session_state['generation_file'] 
+                if (session_state['current_iteration'].value == session_state['total_iterations'].value
+                        and session_state['generation_file']
                         and not thread_running):
-                    
+
                     # Check if the file name contains the current session ID, avoiding returning files from other sessions
                     filename = session_state['generation_file']
                     if session_id in filename:
@@ -446,7 +501,8 @@ def generation_status(session_id):
                         return jsonify({'status': 'completed', 'file': filename})
                     else:
                         # The file name does not match the current session, possibly an incorrect file
-                        print(f"Warning: File {filename} does not match session {session_id}")
+                        print(
+                            f"Warning: File {filename} does not match session {session_id}")
                         session_state['error_message'] = "Generated file does not match current session"
                         return jsonify({'status': 'error', 'error_message': 'Generated file does not match session'})
                 else:
@@ -454,12 +510,12 @@ def generation_status(session_id):
                     if progress >= 100 and not thread_running and not session_state['generation_file']:
                         session_state['error_message'] = "Generation completed but no file was produced"
                         return jsonify({'status': 'error', 'error_message': 'Generation completed but no file was produced. Please refresh the page and try again.'})
-                    
+
                     return jsonify({'status': 'running', 'progress': progress})
-    
+
     # If there is no active session in the global dictionary, fall back to loading from the file
     session_state = load_session(session_id)
-    
+
     # First check stop_event
     if session_state['stop_event'].is_set():
         # If the stop signal is already set, ensure the frontend knows it has stopped
@@ -470,24 +526,28 @@ def generation_status(session_id):
         session_state['generation_file'] = None
         save_session(session_id, session_state)
         return jsonify({'status': 'stopped'})
-        
+
     if session_state['error_message']:
         return jsonify({'status': 'error', 'error_message': session_state['error_message']})
-    
+
     with session_state['current_iteration'].get_lock(), session_state['total_iterations'].get_lock():
-        progress = (session_state['current_iteration'].value / session_state['total_iterations'].value) * 100
-        progress = min(100, max(0, progress))  # Ensure the progress is within 0-100 range
-        print(f"Session {session_id} - Progress: {progress:.2f}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}")
-        
+        progress = (session_state['current_iteration'].value /
+                    session_state['total_iterations'].value) * 100
+        # Ensure the progress is within 0-100 range
+        progress = min(100, max(0, progress))
+        print(
+            f"Session {session_id} - Progress: {progress:.2f}%, Current: {session_state['current_iteration'].value}, Total: {session_state['total_iterations'].value}")
+
         # When loading from a file, there is no thread information, so only based on progress and file situation to judge
         if session_state['current_iteration'].value == session_state['total_iterations'].value and session_state['generation_file']:
             # Check if the file name contains the current session ID
-            filename = session_state['generation_file'] 
+            filename = session_state['generation_file']
             if session_id in filename:
                 print(f"Returning completed file (from disk): {filename}")
                 return jsonify({'status': 'completed', 'file': filename})
             else:
-                print(f"Warning: File {filename} does not match session {session_id}")
+                print(
+                    f"Warning: File {filename} does not match session {session_id}")
                 session_state['error_message'] = "Generated file does not match current session"
                 return jsonify({'status': 'error', 'error_message': 'Generated file does not match session'})
         else:
@@ -504,10 +564,12 @@ def stop_generation(session_id):
             session_state['stop_event'].set()
             # Clear the previous file information, preventing the return of old files
             session_state['generation_file'] = None
-            print(f"Session {session_id} - Stop signal set directly in memory. Generation will be stopped immediately.")
-            save_session(session_id, session_state)  # Still save to file for persistence
+            print(
+                f"Session {session_id} - Stop signal set directly in memory. Generation will be stopped immediately.")
+            # Still save to file for persistence
+            save_session(session_id, session_state)
             return jsonify({'message': 'Stimulus generation successfully stopped.'})
-    
+
     # If there is no active session in the global dictionary, fall back to loading from the file
     session_state = load_session(session_id)
     # Set the stop signal
@@ -516,7 +578,8 @@ def stop_generation(session_id):
     session_state['generation_file'] = None
     # Send the stop message through WebSocket
     websocket_send(session_id, 'all', "Stopping... Please wait.")
-    print(f"Session {session_id} - Stop signal set. Generation will be stopped.")
+    print(
+        f"Session {session_id} - Stop signal set. Generation will be stopped.")
     # Save the updated state
     save_session(session_id, session_state)
     return jsonify({'message': 'Stimulus generation successfully stopped.'})
@@ -526,65 +589,71 @@ def stop_generation(session_id):
 def download_file(session_id, filename):
     # Load the session state
     session_state = load_session(session_id)
-    
+
     # Check if there is a dataframe available
     if session_state.get('dataframe') is None:
         print(f"Error: No dataframe available for session {session_id}")
         return jsonify({'message': 'No data available for download.'}), 404
-    
+
     # Compare the requested file name with the file name in the current session state
     stored_filename = session_state.get('generation_file')
     if stored_filename != filename:
-        print(f"Warning: Requested file {filename} does not match current session file {stored_filename}")
+        print(
+            f"Warning: Requested file {filename} does not match current session file {stored_filename}")
         # Force verification: if the file name does not match, reject the request instead of continuing
         return jsonify({'message': 'Requested file does not match current session file'}), 400
-    
+
     try:
         # Check if the requested filename contains a session ID
         if session_id not in filename:
-            print(f"Error: Requested file {filename} does not contain session ID {session_id}")
+            print(
+                f"Error: Requested file {filename} does not contain session ID {session_id}")
             return jsonify({'message': 'Invalid file request: session ID mismatch'}), 400
-        
+
         # Get a dataframe copy for download, excluding metadata columns
         df_to_download = session_state['dataframe'].copy()
-        
+
         # Remove metadata columns if they exist
-        metadata_columns = ['generation_timestamp', 'batch_id', 'total_iterations', 'download_timestamp', 'error_occurred', 'error_message']
+        metadata_columns = ['generation_timestamp', 'batch_id', 'total_iterations',
+                            'download_timestamp', 'error_occurred', 'error_message']
         for col in metadata_columns:
             if col in df_to_download.columns:
                 df_to_download = df_to_download.drop(columns=[col])
-                
+
         # Store timestamp in variable for logging but don't add to dataframe
         current_timestamp = int(time.time())
-        
+
         # Create a temporary memory file object
         buffer = io.StringIO()
-        
+
         # Write the dataframe to the buffer
         df_to_download.to_csv(buffer, index=False)
         buffer.seek(0)  # Move the pointer back to the beginning
-        
-        print(f"Serving file {filename} with {len(df_to_download)} rows for session {session_id}")
-        
+
+        print(
+            f"Serving file {filename} with {len(df_to_download)} rows for session {session_id}")
+
         # After download, clear the dataframe and file name in the session to avoid repeated download of old data
         # Create a delayed cleanup function
         def delayed_cleanup():
-            time.sleep(2)  # Wait 2 seconds to ensure the file has been fully downloaded
+            # Wait 2 seconds to ensure the file has been fully downloaded
+            time.sleep(2)
             with sessions_lock:
                 if session_id in active_sessions:
                     session_state = active_sessions[session_id]
                     old_filename = session_state.get('generation_file')
                     if old_filename == filename:  # Ensure we do not clear the new generation results
-                        print(f"Cleaning up dataframe and filename for session {session_id} after download")
+                        print(
+                            f"Cleaning up dataframe and filename for session {session_id} after download")
                         session_state['dataframe'] = None
                         session_state['generation_file'] = None
                         save_session(session_id, session_state)
-        
+
         # Execute cleanup in the background thread, not blocking the current request
         cleanup_thread = Thread(target=delayed_cleanup)
         cleanup_thread.daemon = True
         cleanup_thread.start()
-        
+
         # Return the CSV file from memory
         try:
             # Try using the newer version of Flask's parameter name
@@ -615,21 +684,22 @@ def handle_connect():
     """
     try:
         # Get basic client info
-        client_sid = request.sid if request and hasattr(request, 'sid') else None
+        client_sid = request.sid if request and hasattr(
+            request, 'sid') else None
         session_id = None
-        
+
         try:
             if request and hasattr(request, 'args'):
                 session_id = request.args.get('session_id')
         except:
             pass
-        
+
         print(f'Client connected: {client_sid}, Session ID: {session_id}')
-        
+
         # Do NOT perform any operations that might write to the response here
         # Just return True to allow the connection
         return True
-        
+
     except Exception as e:
         print(f"Error in connection handler: {str(e)}")
         return True
@@ -641,19 +711,20 @@ def handle_join_session(data):
     Handle explicit join session request from client after connection is established
     """
     try:
-        client_sid = request.sid if request and hasattr(request, 'sid') else None
+        client_sid = request.sid if request and hasattr(
+            request, 'sid') else None
         if not client_sid:
             return
-            
+
         session_id = data.get('session_id') if data else None
         if not session_id:
             return
-            
+
         # Join room safely after connection is fully established
         from flask_socketio import join_room
         join_room(session_id)
         print(f'Client {client_sid} joined room {session_id}')
-        
+
         # Send confirmation
         socketio.emit('server_status', {
             'status': 'connected',
@@ -662,9 +733,10 @@ def handle_join_session(data):
             'session_id': session_id
         }, room=client_sid)
         print(f'Sent confirmation to client {client_sid}')
-        
+
     except Exception as e:
         print(f"Error in join_session handler: {str(e)}")
+
 
 @socketio.on('disconnect')
 def handle_disconnect(disconnect_reason=None):
@@ -674,17 +746,20 @@ def handle_disconnect(disconnect_reason=None):
     """
     try:
         # Get client SID safely
-        client_sid = request.sid if request and hasattr(request, 'sid') else "unknown"
-        print(f'Client disconnected: {client_sid}, reason: {disconnect_reason}')
-        
+        client_sid = request.sid if request and hasattr(
+            request, 'sid') else "unknown"
+        print(
+            f'Client disconnected: {client_sid}, reason: {disconnect_reason}')
+
         # No need to explicitly leave rooms - Socket.IO does this automatically
         # But we can add additional cleanup if needed in the future
     except Exception as e:
         # Just log the error, don't try to send any messages (client is already disconnected)
         print(f"Error in disconnect handler: {str(e)}")
-        
+
     # Return immediately to complete the disconnection process
     return
+
 
 @socketio.on('ping')
 def handle_ping(data):
@@ -692,23 +767,24 @@ def handle_ping(data):
     Handle ping messages from clients to keep connections alive
     """
     try:
-        client_sid = request.sid if request and hasattr(request, 'sid') else None
+        client_sid = request.sid if request and hasattr(
+            request, 'sid') else None
         if not client_sid:
             return
-            
+
         response = {
             'time': data.get('time', 0) if data else 0,
             'server_time': time.time()
         }
-        
+
         try:
             socketio.emit('pong', response, room=client_sid)
         except Exception as e:
             print(f"Pong error: {str(e)}")
-        
+
     except Exception as e:
         print(f"Error in ping handler: {str(e)}")
-        
+
     return
 
 
@@ -725,8 +801,9 @@ def cleanup_session(session_id):
                     # Try to wait for the thread to end on its own
                     session_state['generation_thread'].join(timeout=0.5)
                 except Exception as e:
-                    print(f"Error joining thread for session {session_id}: {str(e)}")
-            
+                    print(
+                        f"Error joining thread for session {session_id}: {str(e)}")
+
             # Remove from the dictionary
             del active_sessions[session_id]
             print(f"Session {session_id} removed from active sessions.")
@@ -738,11 +815,11 @@ def cleanup_session(session_id):
 def cleanup_sessions():
     import time
     import glob
-    
+
     # Get all session files
     session_files = glob.glob(os.path.join(SESSION_DIR, '*.pkl'))
     current_time = time.time()
-    
+
     for session_file in session_files:
         # Get the last modified time of the file
         file_mod_time = os.path.getmtime(session_file)
@@ -757,12 +834,13 @@ def cleanup_sessions():
                 os.remove(session_file)
                 print(f"Removed expired session file: {session_file}")
             except Exception as e:
-                print(f"Failed to remove session file {session_file}: {str(e)}")
-    
+                print(
+                    f"Failed to remove session file {session_file}: {str(e)}")
+
     # Additional check, clean up all sessions in the global dictionary that do not exist in the file
     with sessions_lock:
         active_session_ids = list(active_sessions.keys())
-    
+
     for session_id in active_session_ids:
         session_file = get_session_file(session_id)
         if not os.path.exists(session_file):
@@ -777,41 +855,42 @@ def huggingface_inference():
         data = request.get_json()
         if not data:
             return jsonify({'status': 'error', 'message': 'Missing request data'}), 400
-        
+
         # Get the parameters from the request
         prompt = data.get('prompt')
         model = data.get('model')
         session_id = data.get('session_id')
-        
+
         if not prompt or not model:
             return jsonify({'status': 'error', 'message': 'Missing required parameters'}), 400
-        
+
         # import HuggingFace client
         from huggingface_hub import InferenceClient
-        
+
         # Import the API key from backend.py
         from .backend import HF_API_KEY
-        
+
         # Create the client
         client = InferenceClient(
-            model, 
+            model,
             token=HF_API_KEY,
-            headers={"x-use-cache": "false"}  # Disable cache, ensure new responses
+            # Disable cache, ensure new responses
+            headers={"x-use-cache": "false"}
         )
-        
+
         # Build the message
         messages = [{"role": "user", "content": prompt}]
-        
+
         # Call the API
         response = client.chat_completion(
             messages=messages,
             max_tokens=2000,
             temperature=0.7
         )
-        
+
         # Extract the response content
         content = response.choices[0].message.content
-        
+
         return jsonify({
             'status': 'success',
             'response': content
@@ -833,6 +912,7 @@ def handle_error(e):
     print(f"Socket.IO error: {str(e)}")
     # Don't try to send error messages here, as it might cause another error
 
+
 @socketio.on_error_default
 def handle_default_error(e):
     """
@@ -843,8 +923,23 @@ def handle_default_error(e):
     print(f"Socket.IO default error: {str(e)}")
     # Don't try to send error messages here, as it might cause another error
 
+
 # Clean up expired sessions at startup
 cleanup_sessions()
+
+
+@app.route('/api/chutesai_inference', methods=['POST'])
+def chutesai_inference():
+    data = request.get_json()
+    session_id = data.get('session_id')
+    prompt = data.get('prompt')
+    # 当model_choice为'chutesai'时，使用完整的模型名称
+    model = 'deepseek-ai/DeepSeek-V3-0324' if data.get(
+        'model') == 'chutesai' else data.get('model', 'deepseek-ai/DeepSeek-V3-0324')
+
+    result, status_code = chutesai_inference_handler(session_id, prompt, model)
+    return jsonify(result), status_code
+
 
 if __name__ == '__main__':
     print("Starting Stimulus Generator server...")
@@ -854,16 +949,16 @@ if __name__ == '__main__':
     print(f"  - Ping timeout: 60s")
     print(f"  - HTTP Compression: Disabled")
     print(f"  - Session Management: Disabled")
-    
+
     # detect if running in production environment
     is_production = os.environ.get('PRODUCTION', 'false').lower() == 'true'
-    
+
     # choose different configurations based on the environment
     if is_production:
         # production environment configuration
         print("Running in production mode")
         socketio.run(
-            app, 
+            app,
             host='0.0.0.0',
             port=int(os.environ.get('PORT', 5000)),
             debug=False,
@@ -873,7 +968,7 @@ if __name__ == '__main__':
         # development environment configuration
         print("Running in development mode")
         socketio.run(
-            app, 
+            app,
             host='0.0.0.0',
             port=5000,
             debug=True,
