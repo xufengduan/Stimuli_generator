@@ -32,6 +32,8 @@ Please verify the following NEW STIMULUS with utmost precision, ensuring they me
 NEW STIMULUS: {new_stimulus};
 
 Experimental stimuli design: {experiment_design}
+
+Please return in JSON format.
 """
 
 # ---- Agent 3 Prompt ----
@@ -290,10 +292,15 @@ def agent_1_generate_stimulus_hf(
     
     # Prepare JSON Schema
     response_format = {
-        "type": "json",
-        "value": {
-            "properties": properties,
-            "required": list(properties.keys()),
+        "type": "json_schema",
+        "json_schema": {
+            "name": "stimulus_schema",
+            "schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys()),
+                "additionalProperties": False
+            }
         }
     }
     
@@ -364,10 +371,15 @@ def agent_2_validate_stimulus_hf(
     
     # Prepare JSON Schema
     response_format = {
-        "type": "json",
-        "value": {
-            "properties": properties,
-            "required": required_fields,
+        "type": "json_schema",
+        "json_schema": {
+            "name": "validation_schema",
+            "schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys()),
+                "additionalProperties": False
+            }
         }
     }
     
@@ -433,10 +445,15 @@ def agent_3_score_stimulus_hf(
     
     # Prepare JSON Schema
     response_format = {
-        "type": "json",
-        "value": {
-            "properties": properties,
-            "required": required_fields,
+        "type": "json_schema",
+        "json_schema": {
+            "name": "scoring_schema",
+            "schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys()),
+                "additionalProperties": False
+            }
         }
     }
     
