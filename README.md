@@ -459,7 +459,7 @@ stimulus-generator webui --port 5001
 3. **重要**：请检查并根据需要调整这些自动生成的属性
 
 ### 2. 开始生成
-![开始生成](path/to/start_generation.png)
+![开始生成](static/images/Generating.gif)
 
 1. 点击"生成刺激材料"按钮
 2. 实时监控进度
