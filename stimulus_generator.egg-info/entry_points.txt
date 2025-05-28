@@ -1,3 +1,0 @@
-[console_scripts]
-stimulus-generator = stimulus_generator.cli:main
-
