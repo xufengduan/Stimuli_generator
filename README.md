@@ -117,7 +117,7 @@ Choose between:
 If you selected GPT-4, enter your OpenAI API Key in the designated field.
 
 #### 1.3 Add Example Stimulus Materials
-![Add Example Materials](path/to/add_examples.png)
+![Add Example Materials](static/images/add_examples.png)
 
 Components are the building blocks of your stimuli. For example, in a study investigating contextual predictability on word choice:
 - A word pair (e.g., math/mathematics)
@@ -135,7 +135,7 @@ To add more examples:
 3. Repeat for additional examples (recommended: at least 3 examples)
 
 #### 1.4 Fill in Experimental Design Description
-![Experimental Design](path/to/experimental_design.png)
+![Experimental Design](static/images/experimental_design.png)
 
 When writing your experimental design description, include these key components:
 
@@ -396,7 +396,7 @@ stimulus-generator webui --port 5001
 如果选择了 GPT-4，请在指定字段中输入您的 OpenAI API Key。
 
 #### 1.3 添加示例刺激材料
-![添加示例材料](path/to/add_examples.png)
+![添加示例材料](static/images/add_examples.png)
 
 组件（Components）是刺激材料的组成部分。例如，在研究语境可预测性对词汇选择的影响时：
 - 词对（例如：math/mathematics）
@@ -414,7 +414,7 @@ stimulus-generator webui --port 5001
 3. 重复上述步骤添加更多示例（建议至少添加3个示例）
 
 #### 1.4 填写实验设计说明
-![实验设计](path/to/experimental_design.png)
+![实验设计](static/images/experimental_design.png)
 
 在编写实验设计说明时，请包含以下关键部分：
 
