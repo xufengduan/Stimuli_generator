@@ -105,14 +105,14 @@ stimulus-generator webui --port 5001
 ### 1. Configure Generation Parameters
 
 #### 1.1 Select Language Model
-![Select Language Model](path/to/select_model.png)
+![Select Language Model](static/images/select_model.png)
 
 Choose between:
 - GPT-4 (requires OpenAI API Key)
 - Meta Llama 3.3 70B Instruct model
 
 #### 1.2 Enter API Key (if using GPT-4)
-![Enter API Key](path/to/enter_api_key.png)
+![Enter API Key](static/images/enter_api_key.png)
 
 If you selected GPT-4, enter your OpenAI API Key in the designated field.
 
@@ -170,7 +170,7 @@ When writing your experimental design description, include these key components:
    Note any specific formatting or submission requirements.
 
 #### 1.5 Review Auto-generated Properties
-![Review Properties](path/to/review_properties.png)
+![Review Properties](static/images/review_properties.png)
 
 After completing the experimental design:
 1. Click "Auto-generate Properties"
@@ -180,7 +180,7 @@ After completing the experimental design:
 3. **Important**: Review and adjust these auto-generated properties as needed
 
 ### 2. Start Generation
-![Start Generation](path/to/start_generation.png)
+![Start Generation](static/images/Generating.gif)
 
 1. Click the "Generate stimulus" button
 2. Monitor progress in real-time
@@ -188,7 +188,7 @@ After completing the experimental design:
 4. Use "Stop" button if needed
 
 ### 3. Get Results
-![Get Results](path/to/get_results.png)
+![Get Results](static/images/get_results.png)
 
 - CSV file automatically downloads upon completion
 - Contains generated materials and scores
@@ -384,14 +384,14 @@ stimulus-generator webui --port 5001
 ### 1. 配置生成参数
 
 #### 1.1 选择语言模型
-![选择语言模型](path/to/select_model.png)
+![选择语言模型](static/images/select_model.png)
 
 可选择：
 - GPT-4（需要 OpenAI API Key）
 - Meta Llama 3.3 70B Instruct 模型
 
 #### 1.2 输入 API Key（如果使用 GPT-4）
-![输入 API Key](path/to/enter_api_key.png)
+![输入 API Key](static/images/enter_api_key.png)
 
 如果选择了 GPT-4，请在指定字段中输入您的 OpenAI API Key。
 
@@ -449,7 +449,7 @@ stimulus-generator webui --port 5001
    注明任何特定的格式或提交要求。
 
 #### 1.5 检查自动生成的属性
-![检查属性](path/to/review_properties.png)
+![检查属性](static/images/review_properties.png)
 
 完成实验设计后：
 1. 点击"自动生成属性"按钮
@@ -467,7 +467,7 @@ stimulus-generator webui --port 5001
 4. 必要时使用"停止"按钮
 
 ### 3. 获取结果
-![获取结果](path/to/get_results.png)
+![获取结果](static/images/get_results.png)
 
 - 完成后自动下载 CSV 格式的结果文件
 - 包含生成的刺激材料及其评分
