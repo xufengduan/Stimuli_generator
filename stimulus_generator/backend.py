@@ -663,8 +663,6 @@ def generate_stimuli(settings):
                 print("Ablation: Skipping Agent 3 (Scoring)")
                 if websocket_callback:
                     websocket_callback("scorer", "Ablation: Skipping Agent 3")
-                update_progress(iteration_num + 1)
-                continue
 
             # Save results
             record = {

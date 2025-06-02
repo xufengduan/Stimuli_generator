@@ -373,8 +373,8 @@ def generate_stimulus(session_id):
 
                 # Generate data
                 settings["ablation"] = {
-                    "use_agent_2": True,
-                    "use_agent_3": True
+                    "use_agent_2": False,
+                    "use_agent_3": False
                 }
                 df, filename = generate_stimuli(settings)
 
