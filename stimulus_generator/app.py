@@ -6,7 +6,7 @@ import os
 import pickle
 from threading import Event, Thread, Lock
 from multiprocessing import Value
-from .backend import generate_stimuli, chutesai_inference_handler
+from .backend import generate_stimuli, custom_model_inference_handler
 from collections import defaultdict
 import io
 from flask_socketio import SocketIO, emit
@@ -313,6 +313,14 @@ def generate_stimulus(session_id):
             'websocket_callback': session_websocket_callback,
         }
 
+        # Add custom model parameters if custom model is selected
+        if model_choice == 'custom':
+            settings['apiUrl'] = data.get('apiUrl', '')
+            settings['modelName'] = data.get('modelName', '')
+            settings['params'] = data.get('params', None)
+            print(
+                f"Session {session_id} - Custom model parameters: URL={settings['apiUrl']}, Model={settings['modelName']}")
+
         # Initialize the total iteration count
         with session_state['total_iterations'].get_lock():
             session_state['total_iterations'].value = settings['iteration']
@@ -364,6 +372,10 @@ def generate_stimulus(session_id):
                     return
 
                 # Generate data
+                settings["ablation"] = {
+                    "use_agent_2": True,
+                    "use_agent_3": True
+                }
                 df, filename = generate_stimuli(settings)
 
                 # Check if there is a stop signal again
@@ -373,19 +385,21 @@ def generate_stimulus(session_id):
                     return
 
                 # Verify the returned results
-                if df is None or filename is None:
-                    error_msg = "Generation process returned None for dataframe or filename"
-                    print(f"Session {session_id} - {error_msg}")
-                    session_state['error_message'] = error_msg
-                    session_state['generation_file'] = None
-                    websocket_send(session_id, 'error', error_msg)
-                    return
+                print(settings["ablation"])
+                if settings["ablation"]["use_agent_2"] == True:
+                    if df is None or filename is None:
+                        error_msg = "Generation process returned None for dataframe or filename"
+                        print(f"Session {session_id} - {error_msg}")
+                        session_state['error_message'] = error_msg
+                        session_state['generation_file'] = None
+                        websocket_send(session_id, 'error', error_msg)
+                        return
 
-                # Verify the number of generated stimuli
-                if len(df) != settings['iteration']:
-                    warning_msg = f"Warning: Expected {settings['iteration']} stimuli but got {len(df)}"
-                    print(f"Session {session_id} - {warning_msg}")
-                    websocket_send(session_id, 'all', warning_msg)
+                    # Verify the number of generated stimuli
+                    if len(df) != settings['iteration']:
+                        warning_msg = f"Warning: Expected {settings['iteration']} stimuli but got {len(df)}"
+                        print(f"Session {session_id} - {warning_msg}")
+                        websocket_send(session_id, 'all', warning_msg)
 
                 # Force using a new timestamp, ensuring the file name is unique
                 import time
@@ -883,9 +897,7 @@ def huggingface_inference():
 
         # Call the API
         response = client.chat_completion(
-            messages=messages,
-            max_tokens=2000,
-            temperature=0.7
+            messages=messages
         )
 
         # Extract the response content
@@ -928,16 +940,24 @@ def handle_default_error(e):
 cleanup_sessions()
 
 
-@app.route('/api/chutesai_inference', methods=['POST'])
-def chutesai_inference():
+@app.route('/api/custom_model_inference', methods=['POST'])
+def custom_model_inference():
     data = request.get_json()
     session_id = data.get('session_id')
     prompt = data.get('prompt')
-    # 当model_choice为'chutesai'时，使用完整的模型名称
-    model = 'deepseek-ai/DeepSeek-V3-0324' if data.get(
-        'model') == 'chutesai' else data.get('model', 'deepseek-ai/DeepSeek-V3-0324')
+    model = data.get('model')
+    api_url = data.get('api_url')
+    api_key = data.get('api_key')
+    params = data.get('params')
 
-    result, status_code = chutesai_inference_handler(session_id, prompt, model)
+    result, status_code = custom_model_inference_handler(
+        session_id,
+        prompt,
+        model,
+        api_url,
+        api_key,
+        params
+    )
     return jsonify(result), status_code
 
 

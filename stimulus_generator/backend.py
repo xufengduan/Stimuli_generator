@@ -6,15 +6,16 @@ import time
 import random
 import requests
 from flask import request, jsonify
+from abc import ABC, abstractmethod
 
 # Set OpenAI API key
 openai.api_key = ""
 
 # Set Hugging Face API key
-HF_API_KEY = "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"
+# HF_API_KEY = "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"
 
 # Set Chutes AI API key
-CHUTES_API_KEY = "cpk_e73d5c0b2dac43eda7a2ff5f4f2ce7e3.f0d133ebd53754df89d851d4ac103b2a.3yhG3q88cAc2AAb430KPiUmhlFLCBfvh"
+# CHUTES_API_KEY = "cpk_e73d5c0b2dac43eda7a2ff5f4f2ce7e3.f0d133ebd53754df89d851d4ac103b2a.3yhG3q88cAc2AAb430KPiUmhlFLCBfvh"
 
 # ======================
 # 1. Configuration (Prompt + Schema)
@@ -62,7 +63,201 @@ AGENT_3_PROPERTIES = {}
 
 
 # ======================
-# 2. Core Agent Functions
+# 2. Abstract Model Client Interface
+# ======================
+class ModelClient(ABC):
+    """Abstract base class for model clients"""
+
+    @abstractmethod
+    def generate_completion(self, prompt, properties, params=None):
+        """Generate a completion with JSON schema response format"""
+        pass
+
+    @abstractmethod
+    def get_default_params(self):
+        """Get default parameters for this model"""
+        pass
+
+
+# ======================
+# 3. Concrete Model Client Implementations
+# ======================
+class OpenAIClient(ModelClient):
+    """OpenAI GPT model client"""
+
+    def __init__(self, api_key=None):
+        if api_key:
+            openai.api_key = api_key
+
+    def generate_completion(self, prompt, properties, params=None):
+        """Generate completion using OpenAI API"""
+        if params is None:
+            params = self.get_default_params()
+
+        response = openai.ChatCompletion.create(
+            model=params["model"],
+            messages=[{"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": list(properties.keys()),
+                        "additionalProperties": False
+                    }
+                }
+            }
+        )
+
+        try:
+            return json.loads(response['choices'][0]['message']['content'])
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse OpenAI JSON response: {e}")
+            return {"error": "Failed to parse response"}
+
+    def get_default_params(self):
+        return {"model": "gpt-4o"}
+
+
+class HuggingFaceClient(ModelClient):
+    """Hugging Face model client"""
+
+    def __init__(self, api_key):
+        self.api_key = api_key
+
+    def generate_completion(self, prompt, properties, params=None):
+        """Generate completion using Hugging Face API"""
+        if params is None:
+            params = self.get_default_params()
+
+        # Create HF InferenceClient with required headers
+        client = InferenceClient(
+            params["model"],
+            token=self.api_key,
+            headers={"x-use-cache": "false"}  # 确保包含此header
+        )
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "response_schema",
+                "schema": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": list(properties.keys()),
+                    "additionalProperties": False
+                }
+            }
+        }
+
+        messages = [{"role": "user", "content": prompt}]
+
+        response = client.chat_completion(
+            messages=messages,
+            response_format=response_format,
+            max_tokens=params.get("max_tokens", 1000),
+            temperature=params.get("temperature", 0.7)
+        )
+
+        try:
+            content = response.choices[0].message.content
+            return json.loads(content)
+        except (json.JSONDecodeError, AttributeError, IndexError) as e:
+            print(f"Failed to parse HuggingFace JSON response: {e}")
+            return {"error": "Failed to parse response"}
+
+    def get_default_params(self):
+        return {
+            "model": "meta-llama/Llama-3.3-70B-Instruct",
+        }
+
+
+class CustomModelClient(ModelClient):
+    """Custom model client for user-defined APIs"""
+
+    def __init__(self, api_url, api_key, model_name):
+        self.api_url = api_url
+        self.api_key = api_key
+        self.model_name = model_name
+
+    def generate_completion(self, prompt, properties, params=None):
+
+        # 构建基础请求
+        request_data = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": list(properties.keys()),
+                        "additionalProperties": False
+                    }
+                }
+            }
+        }
+
+        if params is not None:
+            request_data.update(params)
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            print("Sending request to Chutes with:",
+                  json.dumps(request_data, indent=2))
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=request_data
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            print("Response from Chutes:", json.dumps(result, indent=2))
+
+            content = result["choices"][0]["message"]["content"]
+            return json.loads(content)
+
+        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+            print(f"Failed to call Chutes API: {e}")
+            return {"error": f"Failed to get valid response: {str(e)}"}
+
+    def get_default_params(self):
+        return {
+        }
+
+
+# ======================
+# 4. Model Client Factory
+# ======================
+def create_model_client(model_choice, settings=None):
+    """Factory function to create appropriate model client"""
+    if model_choice == 'GPT-4o':
+        api_key = settings.get('api_key') if settings else None
+        return OpenAIClient(api_key)
+    elif model_choice == 'custom':
+        if not settings:
+            raise ValueError("Settings required for custom model")
+        return CustomModelClient(
+            api_url=settings.get('apiUrl'),
+            api_key=settings.get('api_key'),
+            model_name=settings.get('modelName')
+        )
+    else:  # Hugging Face models
+        return HuggingFaceClient()
+
+
+# ======================
+# 5. Unified Agent Functions
 # ======================
 def check_stimulus_repetition(new_stimulus_dict, previous_stimuli_list):
     """
@@ -78,24 +273,20 @@ def check_stimulus_repetition(new_stimulus_dict, previous_stimuli_list):
 
 
 def agent_1_generate_stimulus(
+        model_client,
         experiment_design,
         previous_stimuli,
+        properties,
         prompt_template=AGENT_1_PROMPT_TEMPLATE,
-        properties=None,
         params=None,
         stop_event=None):
     """
-    Agent 1: Generate new stimulus, return dictionary format.
+    Agent 1: Generate new stimulus using the provided model client
     """
     if stop_event and stop_event.is_set():
         print("Generation stopped by user in agent_1_generate_stimulus.")
         return {"stimulus": "STOPPED"}
 
-    if properties is None:
-        properties = AGENT_1_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200, "model": "gpt-4o"}
-
     # Use fixed generation_requirements
     generation_requirements = "Please generate a new stimulus in the same format as the existing stimuli, and ensure that the new stimulus is different from those in the existing stimuli."
 
@@ -105,642 +296,101 @@ def agent_1_generate_stimulus(
         generation_requirements=generation_requirements
     )
 
-    response = openai.ChatCompletion.create(
-        model=params["model"],
-        messages=[{"role": "user", "content": prompt}],
-        temperature=params["temperature"],
-        max_tokens=params["max_tokens"],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "validation_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": list(properties.keys()),
-                    "additionalProperties": False
-                }}
-        }
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user after API call in agent_1_generate_stimulus.")
-        return {"stimulus": "STOPPED"}
-
     try:
-        # response['choices'][0]['message']['content'] should be a JSON string
-        new_stimulus = json.loads(response['choices'][0]['message']['content'])
-    except json.JSONDecodeError:
-        print("Failed to parse JSON response:", response)
-        # If parsing fails, return a default object, or throw an error
-        new_stimulus = {
-            "stimulus": "ERROR/ERROR",
-        }
+        result = model_client.generate_completion(prompt, properties, params)
 
-    return new_stimulus
+        # Check stop event again
+        if stop_event and stop_event.is_set():
+            print(
+                "Generation stopped by user after API call in agent_1_generate_stimulus.")
+            return {"stimulus": "STOPPED"}
+
+        if "error" in result:
+            return {"stimulus": "ERROR/ERROR"}
+
+        return result
+    except Exception as e:
+        print(f"Error in agent_1_generate_stimulus: {e}")
+        return {"stimulus": "ERROR/ERROR"}
 
 
 def agent_2_validate_stimulus(
+        model_client,
         new_stimulus,
         experiment_design,
-        previous_stimuli,
+        properties,
         prompt_template=AGENT_2_PROMPT_TEMPLATE,
-        properties=None,
         params=None,
         stop_event=None):
     """
-    Agent 2: Validate experimental stimulus
+    Agent 2: Validate experimental stimulus using the provided model client
     """
     if stop_event and stop_event.is_set():
         print("Generation stopped by user in agent_2_validate_stimulus.")
         return {"Overall": "failed", "reason": "Stopped by user"}
 
-    if properties is None:
-        properties = AGENT_2_PROPERTIES
-    if params is None:
-        params = {"temperature": 0, "max_tokens": 100, "model": "gpt-4o"}
-
-    # Automatically set all properties' keys as required
-    required_fields = list(properties.keys())
-
     prompt = prompt_template.format(
         experiment_design=experiment_design,
         new_stimulus=new_stimulus
     )
 
-    response = openai.ChatCompletion.create(
-        model=params["model"],
-        messages=[{"role": "user", "content": prompt}],
-        temperature=params["temperature"],
-        max_tokens=params["max_tokens"],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "validation_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required_fields,
-                    "additionalProperties": False
-                }
-            }
-        }
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user after API call in agent_2_validate_stimulus.")
-        return {"Overall": "failed", "reason": "Stopped by user"}
-
     try:
-        result = json.loads(response['choices'][0]['message']['content'])
-    except json.JSONDecodeError:
-        print("Failed to parse JSON response:", response)
-        result = {"status": "failed", "reason": "Failed to validate stimulus"}
+        result = model_client.generate_completion(prompt, properties, params)
 
-    return result
+        # Check stop event again
+        if stop_event and stop_event.is_set():
+            print(
+                "Generation stopped by user after API call in agent_2_validate_stimulus.")
+            return {"Overall": "failed", "reason": "Stopped by user"}
+
+        if "error" in result:
+            return {"Overall": "failed", "reason": "Failed to validate stimulus"}
+
+        return result
+    except Exception as e:
+        print(f"Error in agent_2_validate_stimulus: {e}")
+        return {"Overall": "failed", "reason": "Failed to validate stimulus"}
 
 
 def agent_3_score_stimulus(
+        model_client,
         valid_stimulus,
         experiment_design,
+        properties,
         prompt_template=AGENT_3_PROMPT_TEMPLATE,
-        properties=None,
         params=None,
         stop_event=None):
     """
-    Agent 3: Score experimental stimulus
+    Agent 3: Score experimental stimulus using the provided model client
     """
     if stop_event and stop_event.is_set():
-        print("Generation stopped by user in 'Validator'.")
+        print("Generation stopped by user in agent_3_score_stimulus.")
         return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
-
-    if properties is None:
-        properties = AGENT_3_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200, "model": "gpt-4o"}
-
-    required_fields = list(properties.keys())
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        valid_stimulus=valid_stimulus,
-    )
-
-    response = openai.ChatCompletion.create(
-        model=params["model"],
-        messages=[{"role": "user", "content": prompt}],
-        temperature=params["temperature"],
-        max_tokens=params["max_tokens"],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "scoring_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required_fields,
-                    "additionalProperties": False
-                }
-            }
-        }
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in 'Scorer'.")
-        return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
-
-    try:
-        return json.loads(response['choices'][0]['message']['content'])
-    except json.JSONDecodeError:
-        print("Failed to parse JSON response:", response)
-        # If parsing fails, return a default/empty scoring object
-        return {field: 0 for field in required_fields}
-
-
-def agent_1_generate_stimulus_hf(
-        experiment_design,
-        previous_stimuli,
-        prompt_template=AGENT_1_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 1: Use Hugging Face API to generate new stimulus, return dictionary format.
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_1_generate_stimulus_hf.")
-        return {"stimulus": "STOPPED"}
-
-    if properties is None:
-        properties = AGENT_1_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200,
-                  "model": "meta-llama/Llama-3.3-70B-Instruct"}
-
-    # Use fixed generation_requirements
-    generation_requirements = "Please generate a new stimulus in the same format as the existing stimuli, and ensure that the new stimulus is different from those in the existing stimuli."
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        previous_stimuli=previous_stimuli,
-        generation_requirements=generation_requirements
-    )
-
-    # Create HF InferenceClient, set headers
-    client = InferenceClient(
-        params["model"],
-        token=HF_API_KEY,
-        # Disable cache, ensure new results every time
-        headers={"x-use-cache": "false"}
-    )
-
-    # Prepare JSON Schema
-    response_format = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "stimulus_schema",
-            "schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Build messages
-    messages = [{"role": "user", "content": prompt}]
-
-    # Call API
-    response = client.chat_completion(
-        messages=messages,
-        response_format=response_format,
-        max_tokens=params["max_tokens"],
-        temperature=params["temperature"]
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user after API call in agent_1_generate_stimulus_hf.")
-        return {"stimulus": "STOPPED"}
-
-    try:
-        # Parse response
-        content = response.choices[0].message.content
-        new_stimulus = json.loads(content)
-    except (json.JSONDecodeError, AttributeError, IndexError) as e:
-        print(f"Failed to parse HF JSON response: {e}")
-        # If parsing fails, return a default object
-        new_stimulus = {
-            "stimulus": "ERROR/ERROR",
-        }
-
-    return new_stimulus
-
-
-def agent_2_validate_stimulus_hf(
-        new_stimulus,
-        experiment_design,
-        previous_stimuli,
-        prompt_template=AGENT_2_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 2: Use Hugging Face API to validate experimental stimulus
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_2_validate_stimulus_hf.")
-        return {"Overall": "failed", "reason": "Stopped by user"}
-
-    if properties is None:
-        properties = AGENT_2_PROPERTIES
-    if params is None:
-        params = {"temperature": 0, "max_tokens": 100,
-                  "model": "meta-llama/Llama-3.3-70B-Instruct"}
-
-    # Automatically set all properties' keys as required
-    required_fields = list(properties.keys())
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        new_stimulus=new_stimulus
-    )
-
-    # Create HF InferenceClient, set headers
-    client = InferenceClient(
-        params["model"],
-        token=HF_API_KEY,
-        # Disable cache, ensure new results every time
-        headers={"x-use-cache": "false"}
-    )
-
-    # Prepare JSON Schema
-    response_format = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "validation_schema",
-            "schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Build messages
-    messages = [{"role": "user", "content": prompt}]
-
-    # Call API
-    response = client.chat_completion(
-        messages=messages,
-        response_format=response_format,
-        max_tokens=params["max_tokens"],
-        temperature=params["temperature"]
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user after API call in agent_2_validate_stimulus_hf.")
-        return {"Overall": "failed", "reason": "Stopped by user"}
-
-    try:
-        # Parse response
-        content = response.choices[0].message.content
-        result = json.loads(content)
-    except (json.JSONDecodeError, AttributeError, IndexError) as e:
-        print(f"Failed to parse HF JSON response: {e}")
-        result = {"status": "failed", "reason": "Failed to validate stimulus"}
-
-    return result
-
-
-def agent_3_score_stimulus_hf(
-        valid_stimulus,
-        experiment_design,
-        prompt_template=AGENT_3_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 3: Use Hugging Face API to score experimental stimulus
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in 'Scorer'.")
-        return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
-
-    if properties is None:
-        properties = AGENT_3_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200,
-                  "model": "meta-llama/Llama-3.3-70B-Instruct"}
-
-    required_fields = list(properties.keys())
 
     prompt = prompt_template.format(
         experiment_design=experiment_design,
         valid_stimulus=valid_stimulus
     )
 
-    # Create HF InferenceClient, set headers
-    client = InferenceClient(
-        params["model"],
-        token=HF_API_KEY,
-        # Disable cache, ensure new results every time
-        headers={"x-use-cache": "false"}
-    )
-
-    # Prepare JSON Schema
-    response_format = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "scoring_schema",
-            "schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Build messages
-    messages = [{"role": "user", "content": prompt}]
-
-    # Call API
-    response = client.chat_completion(
-        messages=messages,
-        response_format=response_format,
-        max_tokens=params["max_tokens"],
-        temperature=params["temperature"]
-    )
-
-    # Check stop event again
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in 'Scorer'.")
-        return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
-
     try:
-        # Parse response
-        content = response.choices[0].message.content
-        return json.loads(content)
-    except (json.JSONDecodeError, AttributeError, IndexError) as e:
-        print(f"Failed to parse HF JSON response: {e}")
-        # If parsing fails, return a default/empty scoring object
-        return {field: 0 for field in required_fields}
-
-
-def agent_1_generate_stimulus_chutes(
-        experiment_design,
-        previous_stimuli,
-        prompt_template=AGENT_1_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 1: Use Chutes AI API to generate new stimulus, return dictionary format.
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_1_generate_stimulus_chutes.")
-        return {"stimulus": "STOPPED"}
-
-    if properties is None:
-        properties = AGENT_1_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200,
-                  "model": "deepseek-ai/DeepSeek-V3-0324"}
-
-    # Use fixed generation_requirements
-    generation_requirements = "Please generate a new stimulus in the same format as the existing stimuli, and ensure that the new stimulus is different from those in the existing stimuli."
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        previous_stimuli=previous_stimuli,
-        generation_requirements=generation_requirements
-    )
-
-    # Prepare request data
-    request_data = {
-        "model": params["model"],
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": params["max_tokens"],
-        "temperature": params["temperature"],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Make API call
-    headers = {
-        "Authorization": f"Bearer {CHUTES_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(
-            "https://llm.chutes.ai/v1/chat/completions",
-            headers=headers,
-            json=request_data
-        )
-        response.raise_for_status()
-        result = response.json()
+        result = model_client.generate_completion(prompt, properties, params)
 
         # Check stop event again
         if stop_event and stop_event.is_set():
-            print(
-                "Generation stopped by user after API call in agent_1_generate_stimulus_chutes.")
-            return {"stimulus": "STOPPED"}
-
-        try:
-            # Parse response
-            content = result['choices'][0]['message']['content']
-            new_stimulus = json.loads(content)
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"Failed to parse Chutes AI JSON response: {e}")
-            new_stimulus = {
-                "stimulus": "ERROR/ERROR",
-            }
-
-    except Exception as e:
-        print(f"Error calling Chutes AI API: {e}")
-        new_stimulus = {
-            "stimulus": "ERROR/ERROR",
-        }
-
-    return new_stimulus
-
-
-def agent_2_validate_stimulus_chutes(
-        new_stimulus,
-        experiment_design,
-        previous_stimuli,
-        prompt_template=AGENT_2_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 2: Use Chutes AI API to validate experimental stimulus
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_2_validate_stimulus_chutes.")
-        return {"Overall": "failed", "reason": "Stopped by user"}
-
-    if properties is None:
-        properties = AGENT_2_PROPERTIES
-    if params is None:
-        params = {"temperature": 0, "max_tokens": 100,
-                  "model": "deepseek-ai/DeepSeek-V3-0324"}
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        new_stimulus=new_stimulus
-    )
-
-    # Prepare request data
-    request_data = {
-        "model": params["model"],
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": params["max_tokens"],
-        "temperature": params["temperature"],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Make API call
-    headers = {
-        "Authorization": f"Bearer {CHUTES_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(
-            "https://llm.chutes.ai/v1/chat/completions",
-            headers=headers,
-            json=request_data
-        )
-        response.raise_for_status()
-        result = response.json()
-
-        # Check stop event again
-        if stop_event and stop_event.is_set():
-            print(
-                "Generation stopped by user after API call in agent_2_validate_stimulus_chutes.")
-            return {"Overall": "failed", "reason": "Stopped by user"}
-
-        try:
-            # Parse response
-            content = result['choices'][0]['message']['content']
-            validation_result = json.loads(content)
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"Failed to parse Chutes AI JSON response: {e}")
-            validation_result = {"status": "failed",
-                                 "reason": "Failed to validate stimulus"}
-
-    except Exception as e:
-        print(f"Error calling Chutes AI API: {e}")
-        validation_result = {"status": "failed",
-                             "reason": "Failed to validate stimulus"}
-
-    return validation_result
-
-
-def agent_3_score_stimulus_chutes(
-        valid_stimulus,
-        experiment_design,
-        prompt_template=AGENT_3_PROMPT_TEMPLATE,
-        properties=None,
-        params=None,
-        stop_event=None):
-    """
-    Agent 3: Use Chutes AI API to score experimental stimulus
-    """
-    if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_3_score_stimulus_chutes.")
-        return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
-
-    if properties is None:
-        properties = AGENT_3_PROPERTIES
-    if params is None:
-        params = {"temperature": 0.7, "max_tokens": 200,
-                  "model": "deepseek-ai/DeepSeek-V3-0324"}
-
-    prompt = prompt_template.format(
-        experiment_design=experiment_design,
-        valid_stimulus=valid_stimulus
-    )
-
-    # Prepare request data
-    request_data = {
-        "model": params["model"],
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": params["max_tokens"],
-        "temperature": params["temperature"],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys()),
-                "additionalProperties": False
-            }
-        }
-    }
-
-    # Make API call
-    headers = {
-        "Authorization": f"Bearer {CHUTES_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(
-            "https://llm.chutes.ai/v1/chat/completions",
-            headers=headers,
-            json=request_data
-        )
-        response.raise_for_status()
-        result = response.json()
-
-        # Check stop event again
-        if stop_event and stop_event.is_set():
-            print(
-                "Generation stopped by user after API call in agent_3_score_stimulus_chutes.")
+            print("Generation stopped by user after API call in agent_3_score_stimulus.")
             return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
 
-        try:
-            # Parse response
-            content = result['choices'][0]['message']['content']
-            scores = json.loads(content)
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"Failed to parse Chutes AI JSON response: {e}")
-            scores = {field: 0 for field in properties.keys()}
+        if "error" in result:
+            return {field: 0 for field in properties.keys()}
 
+        return result
     except Exception as e:
-        print(f"Error calling Chutes AI API: {e}")
-        scores = {field: 0 for field in properties.keys()}
-
-    return scores
+        print(f"Error in agent_3_score_stimulus: {e}")
+        return {field: 0 for field in properties.keys()}
 
 
 # ======================
-# 3. Main Flow Function
+# 6. Main Flow Function
 # ======================
 def generate_stimuli(settings):
     openai.api_key = settings.get('api_key', "")
@@ -750,12 +400,22 @@ def generate_stimuli(settings):
     experiment_design = settings['experiment_design']
     previous_stimuli = settings['previous_stimuli'] if settings['previous_stimuli'] else [
     ]
-    model_choice = settings.get(
-        'model_choice', 'GPT-4o')  # Default to use GPT-4o
+    model_choice = settings.get('model_choice', 'GPT-4o')
+
+    ablation = settings.get('ablation', {
+        "use_agent_2": True,
+        "use_agent_3": True
+    })
+
+    repetition_count = 0
+    validation_fails = 0
+
+    # Get custom parameters for custom model
+    custom_params = settings.get('params', None)
+
     # Get session_update_callback function and websocket_callback function
     session_update_callback = settings.get('session_update_callback')
-    websocket_callback = settings.get(
-        'websocket_callback')  # Get websocket callback
+    websocket_callback = settings.get('websocket_callback')
 
     # Ensure progress value is correctly initialized
     with current_iteration.get_lock(), total_iterations.get_lock():
@@ -781,12 +441,10 @@ def generate_stimuli(settings):
     record_list = []
     agent_1_properties = settings.get('agent_1_properties', {})
     print("Agent 1 Properties:", agent_1_properties)
-    # Use websocket to send message to frontend
     if websocket_callback:
         websocket_callback(
             "setup", f"Agent 1 Properties: {agent_1_properties}")
 
-    # Check again if stopped
     if check_stop():
         return None, None
 
@@ -796,7 +454,6 @@ def generate_stimuli(settings):
         websocket_callback(
             "setup", f"Agent 2 Properties: {agent_2_properties}")
 
-    # Check again if stopped
     if check_stop():
         return None, None
 
@@ -806,45 +463,22 @@ def generate_stimuli(settings):
         websocket_callback(
             "setup", f"Agent 3 Properties: {agent_3_properties}")
 
-    # Check again if stopped
     if check_stop():
         return None, None
 
-    # Select appropriate Agent function
-    if model_choice == 'GPT-4o':
-        agent_1_func = lambda **kwargs: agent_1_generate_stimulus(
-            stop_event=stop_event, **kwargs)
-        agent_2_func = lambda **kwargs: agent_2_validate_stimulus(
-            stop_event=stop_event, **kwargs)
-        agent_3_func = lambda **kwargs: agent_3_score_stimulus(
-            stop_event=stop_event, **kwargs)
-        print("Using OpenAI GPT-4o for generation")
+    # Create model client using factory
+    try:
+        model_client = create_model_client(model_choice, settings)
+        print(f"Using model: {model_choice}")
         if websocket_callback:
-            websocket_callback("setup", "Using OpenAI GPT-4o for generation")
-    elif model_choice == 'chutesai':
-        agent_1_func = lambda **kwargs: agent_1_generate_stimulus_chutes(
-            stop_event=stop_event, **kwargs)
-        agent_2_func = lambda **kwargs: agent_2_validate_stimulus_chutes(
-            stop_event=stop_event, **kwargs)
-        agent_3_func = lambda **kwargs: agent_3_score_stimulus_chutes(
-            stop_event=stop_event, **kwargs)
-        print(f"Using Chutes AI model: {model_choice}")
+            websocket_callback("setup", f"Using model: {model_choice}")
+    except Exception as e:
+        error_msg = f"Failed to create model client: {str(e)}"
+        print(error_msg)
         if websocket_callback:
-            websocket_callback(
-                "setup", f"Using Chutes AI model: {model_choice}")
-    else:  # Use Hugging Face model
-        agent_1_func = lambda **kwargs: agent_1_generate_stimulus_hf(
-            stop_event=stop_event, **kwargs)
-        agent_2_func = lambda **kwargs: agent_2_validate_stimulus_hf(
-            stop_event=stop_event, **kwargs)
-        agent_3_func = lambda **kwargs: agent_3_score_stimulus_hf(
-            stop_event=stop_event, **kwargs)
-        print(f"Using Hugging Face model: {model_choice}")
-        if websocket_callback:
-            websocket_callback(
-                "setup", f"Using Hugging Face model: {model_choice}")
+            websocket_callback("setup", error_msg)
+        return None, None
 
-    # Check again if stopped before last start
     if check_stop():
         return None, None
 
@@ -854,42 +488,39 @@ def generate_stimuli(settings):
             return
 
         with current_iteration.get_lock(), total_iterations.get_lock():
-            # Ensure completed iterations do not exceed total iterations
             current_value = min(completed_iterations, total_iterations.value)
-            # Only update if new value is greater than current value
             if current_value > current_iteration.value:
                 current_iteration.value = current_value
-                # If there is a callback function, call it immediately
                 if session_update_callback:
                     session_update_callback()
 
     # Get actual total iterations
     total_iter_value = total_iterations.value
     for iteration_num in range(total_iter_value):
-        # Check if there is a stop signal
         if check_stop():
-            return None, None  # Return None instead of filename when user stops
+            return None, None
 
         round_message = f"=== No. {iteration_num + 1} Round ==="
         print(round_message)
         if websocket_callback:
-            websocket_callback("all", round_message)  # Send to all areas
+            websocket_callback("all", round_message)
 
         # Step 1: Generate stimulus
         while True:
-            # Check if there is a stop signal
             if check_stop():
-                return None, None  # Return None instead of filename when user stops
+                return None, None
 
             try:
-                stimuli = agent_1_func(
+                stimuli = agent_1_generate_stimulus(
+                    model_client=model_client,
                     experiment_design=experiment_design,
                     previous_stimuli=previous_stimuli,
+                    properties=agent_1_properties,
                     prompt_template=AGENT_1_PROMPT_TEMPLATE,
-                    properties=settings['agent_1_properties']
+                    params=custom_params,
+                    stop_event=stop_event
                 )
 
-                # Check if agent_1 returned a stop marker
                 if isinstance(stimuli, dict) and stimuli.get('stimulus') == 'STOPPED':
                     if check_stop("Generation stopped after 'Generator'."):
                         return None, None
@@ -899,32 +530,41 @@ def generate_stimuli(settings):
                     websocket_callback(
                         "generator", f"Generator's Output: {json.dumps(stimuli, indent=2)}")
 
-                # Check again if stopped
                 if check_stop("Generation stopped after 'Generator'."):
                     return None, None
 
                 # Step 1.5: Check if stimulus already exists
-                if check_stimulus_repetition(stimuli, previous_stimuli):
-                    print("Detected repeated stimulus, regenerating...")
-                    if websocket_callback:
-                        websocket_callback(
-                            "generator", "Detected repeated stimulus, regenerating...")
-                    continue  # Regenerate
 
-                # Check again if stopped
+                if check_stimulus_repetition(stimuli, previous_stimuli):
+                    repetition_count += 1
+                    if ablation["use_agent_2"]:
+                        print("Detected repeated stimulus, regenerating...")
+
+                        if websocket_callback:
+                            websocket_callback(
+                                "generator", "Detected repeated stimulus, regenerating...")
+                        continue
+                    else:
+                        print(
+                            "Ablation: Skipping Agent 2 (Repetition Check)")
+                        if websocket_callback:
+                            websocket_callback(
+                                "generator", "Ablation: Skipping Agent 2 (Repetition Check)")
+
                 if check_stop():
                     return None, None
 
                 # Step 2: Validate stimulus
-                validation_result = agent_2_func(
+                validation_result = agent_2_validate_stimulus(
+                    model_client=model_client,
                     new_stimulus=stimuli,
                     experiment_design=experiment_design,
-                    previous_stimuli=previous_stimuli,
+                    properties=agent_2_properties,
                     prompt_template=AGENT_2_PROMPT_TEMPLATE,
-                    properties=settings['agent_2_properties']
+                    params=custom_params,
+                    stop_event=stop_event
                 )
 
-                # Check if agent_2 returned a stop marker
                 if isinstance(validation_result, dict) and validation_result.get('reason') == 'Stopped by user':
                     if check_stop("Generation stopped after 'Validator'."):
                         return None, None
@@ -934,87 +574,108 @@ def generate_stimuli(settings):
                     websocket_callback(
                         "validator", f"Validator's Output: {json.dumps(validation_result, indent=2)}")
 
-                # Check again if stopped
                 if check_stop("Generation stopped after 'Validator'."):
                     return None, None
 
                 # Check if validation passed
                 if validation_result.get('Overall') == 'failed':
-                    print("Failed to validate, regenerating...")
-                    if websocket_callback:
-                        websocket_callback(
-                            "validator", "Failed to validate, regenerating...")
-                    continue
+                    validation_fails += 1
+
+                    if ablation["use_agent_2"]:
+                        print("Failed to validate, regenerating...")
+                        if websocket_callback:
+                            websocket_callback(
+                                "validator", "Failed to validate, regenerating...")
+                        continue
+                    else:
+                        print(
+                            "Ablation: Skipping Agent 2 (Validation and Repetition Check)")
+                        if websocket_callback:
+                            websocket_callback(
+                                "validator", "Ablation: Skipping Agent 2")
+                        update_progress(iteration_num + 1)
+                        break
                 else:
-                    # Use a dedicated progress update function to update progress
                     update_progress(iteration_num + 1)
                     break
+
             except Exception as e:
                 error_msg = f"Error in generation/validation step: {str(e)}"
                 print(error_msg)
                 if websocket_callback:
                     websocket_callback("all", error_msg)
-                # If an error occurs and generation is interrupted, return the current generated records
                 if len(record_list) > 0:
                     df = pd.DataFrame(record_list)
                     session_id = settings.get('session_id', 'default')
                     timestamp = int(time.time())
-                    # Add extra unique identifier to avoid filename conflicts within the same second
                     unique_id = ''.join(random.choice(
                         '0123456789abcdef') for _ in range(6))
                     suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}_error.csv"
 
-                    # Add metadata columns for internal tracking purposes
-                    # These will be removed before final download to the user
                     df['generation_timestamp'] = timestamp
                     df['batch_id'] = unique_id
                     df['total_iterations'] = total_iter_value
                     df['error_occurred'] = True
                     df['error_message'] = str(e)
 
+                    import os
+
+                    os.makedirs("outputs", exist_ok=True)
+                    suggested_filename = os.path.join(
+                        "outputs", f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv")
+
                     return df, suggested_filename
                 else:
-                    # If no records are generated, return an error
                     raise e
 
-        # Check again if stopped
         if check_stop("Generation stopped after 'Validator'."):
             return None, None
 
         try:
-            # Check again if stopped
             if check_stop("Generation stopped before Scorer."):
                 return None, None
 
             # Step 3: Score
-            scores = agent_3_func(
-                valid_stimulus=stimuli,
-                experiment_design=experiment_design,
-                prompt_template=AGENT_3_PROMPT_TEMPLATE,
-                properties=settings['agent_3_properties']
-            )
+            if ablation["use_agent_3"]:
+                scores = agent_3_score_stimulus(
+                    model_client=model_client,
+                    valid_stimulus=stimuli,
+                    experiment_design=experiment_design,
+                    properties=agent_3_properties,
+                    prompt_template=AGENT_3_PROMPT_TEMPLATE,
+                    params=custom_params,
+                    stop_event=stop_event
+                )
 
-            # Check if agent_3 returned a stop marker
-            if isinstance(scores, dict) and all(v == 0 for v in scores.values()):
-                if stop_event.is_set():  # Additional check to confirm that the stop caused all 0 scores
-                    if check_stop("Generation stopped after 'Scorer'."):
-                        return None, None
+                if isinstance(scores, dict) and all(v == 0 for v in scores.values()):
+                    if stop_event.is_set():
+                        if check_stop("Generation stopped after 'Scorer'."):
+                            return None, None
 
-            print("Agent 3 Output:", scores)
-            if websocket_callback:
-                websocket_callback(
-                    "scorer", f"Scorer's Output: {json.dumps(scores, indent=2)}")
+                print("Agent 3 Output:", scores)
+                if websocket_callback:
+                    websocket_callback(
+                        "scorer", f"Scorer's Output: {json.dumps(scores, indent=2)}")
 
-            # Check again if stopped
-            if check_stop("Generation stopped after 'Scorer'."):
-                return None, None
+                if check_stop("Generation stopped after 'Scorer'."):
+                    return None, None
+            else:
+                print("Ablation: Skipping Agent 3 (Scoring)")
+                if websocket_callback:
+                    websocket_callback("scorer", "Ablation: Skipping Agent 3")
+                update_progress(iteration_num + 1)
+                continue
 
             # Save results
             record = {
-                "stimulus_id": iteration_num + 1,  # Use loop count as ID
-                "stimulus_content": stimuli
+                "stimulus_id": iteration_num + 1,
+                "stimulus_content": stimuli,
+                "repetition_count": repetition_count,
+                "validation_fails": validation_fails,
+                "validation_failure_reasons": validation_result
             }
-            record.update(scores or {})
+            if ablation["use_agent_3"]:
+                record.update(scores or {})
             record_list.append(record)
 
             # Update previous_stimuli
@@ -1022,48 +683,37 @@ def generate_stimuli(settings):
 
             # If some records have been generated, create intermediate results
             if (iteration_num + 1) % 5 == 0 or iteration_num + 1 == total_iter_value:
-                # Create temporary DataFrame, for restoring during interruption
                 temp_df = pd.DataFrame(record_list)
                 session_id = settings.get('session_id', 'default')
-                # Add timestamp to filename, ensure different filenames each time
                 timestamp = int(time.time())
-                # Add extra unique identifier to avoid filename conflicts within the same second
                 unique_id = ''.join(random.choice('0123456789abcdef')
                                     for _ in range(6))
                 suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
 
-                # Add metadata columns to internal dataframe for tracking purposes
-                # These will be removed before final download to the user
                 temp_df['generation_timestamp'] = timestamp
                 temp_df['batch_id'] = unique_id
                 temp_df['total_iterations'] = total_iter_value
 
-                # Check if stopped
                 if check_stop():
                     return temp_df, suggested_filename
 
-                # Here we don't save the file, but return the current df and filename, so that the external function can save session state
                 if iteration_num + 1 == total_iter_value:
-                    # Check again if progress has been updated to 100%
                     update_progress(total_iter_value)
                     return temp_df, suggested_filename
+
         except Exception as e:
             error_msg = f"Error in scoring step: {str(e)}"
             print(error_msg)
             if websocket_callback:
                 websocket_callback("all", error_msg)
-            # If an error occurs and some records have been generated, return them
             if len(record_list) > 0:
                 df = pd.DataFrame(record_list)
                 session_id = settings.get('session_id', 'default')
                 timestamp = int(time.time())
-                # Add extra unique identifier to avoid filename conflicts within the same second
                 unique_id = ''.join(random.choice('0123456789abcdef')
                                     for _ in range(6))
                 suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}_error.csv"
 
-                # Add metadata columns for internal tracking purposes
-                # These will be removed before final download to the user
                 df['generation_timestamp'] = timestamp
                 df['batch_id'] = unique_id
                 df['total_iterations'] = total_iter_value
@@ -1072,27 +722,21 @@ def generate_stimuli(settings):
 
                 return df, suggested_filename
             else:
-                # If no records are generated, return an error
                 raise e
 
     # Check again if stopped at final step
     if check_stop("Generation stopped at final step."):
-        # If some records have been generated, return them
         if len(record_list) > 0:
             df = pd.DataFrame(record_list)
             session_id = settings.get('session_id', 'default')
             timestamp = int(time.time())
-            # Add extra unique identifier to avoid filename conflicts within the same second
             unique_id = ''.join(random.choice('0123456789abcdef')
                                 for _ in range(6))
             suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
 
-            # Add metadata columns for internal tracking purposes
-            # These will be removed before final download to the user
             df['generation_timestamp'] = timestamp
             df['batch_id'] = unique_id
             df['total_iterations'] = total_iter_value
-            # Normal completion should not be marked as error
             df['error_occurred'] = False
             df['error_message'] = ""
 
@@ -1100,31 +744,23 @@ def generate_stimuli(settings):
             print(completion_msg)
             if websocket_callback:
                 websocket_callback("all", completion_msg)
-            # Return DataFrame and suggested filename, instead of saving file
             return df, suggested_filename
         return None, None
 
     # Only generate DataFrame and return results after all iterations
     if len(record_list) > 0:
-        # Ensure final progress is 100%
         update_progress(total_iter_value)
 
         df = pd.DataFrame(record_list)
-        # Use session ID to create unique filename (only return as suggested filename)
         session_id = settings.get('session_id', 'default')
         timestamp = int(time.time())
-        # Add extra unique identifier to avoid filename conflicts within the same second
         unique_id = ''.join(random.choice('0123456789abcdef')
                             for _ in range(6))
-        # Remove _error suffix, this is normal completion
         suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv"
 
-        # Add metadata columns for internal tracking purposes
-        # These will be removed before final download to the user
         df['generation_timestamp'] = timestamp
         df['batch_id'] = unique_id
         df['total_iterations'] = total_iter_value
-        # Normal completion should not be marked as error
         df['error_occurred'] = False
         df['error_message'] = ""
 
@@ -1132,7 +768,6 @@ def generate_stimuli(settings):
         print(completion_msg)
         if websocket_callback:
             websocket_callback("all", completion_msg)
-        # Return DataFrame and suggested filename, instead of saving file
         return df, suggested_filename
     else:
         print("No records generated.")
@@ -1141,69 +776,18 @@ def generate_stimuli(settings):
         return None, None
 
 
-def chutesai_inference_handler(session_id, prompt, model='deepseek-ai/DeepSeek-V3-0324'):
+# ======================
+# 7. Legacy Support Function (保持向后兼容)
+# ======================
+def custom_model_inference_handler(session_id, prompt, model, api_url, api_key, params=None):
+    """Legacy function for backward compatibility"""
     try:
-        if not session_id or not prompt:
-            return {'error': 'Missing required parameters'}, 400
+        client = CustomModelClient(api_url, api_key, model)
+        result = client.generate_completion(prompt, {}, params)
 
-        # Call Chutes AI API
-        headers = {
-            "Authorization": f"Bearer {CHUTES_API_KEY}",
-            "Content-Type": "application/json",
-            "Accept": "*/*"
-        }
+        if "error" in result:
+            return {'error': result["error"]}, 500
 
-        request_data = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-            "max_tokens": 2000,
-            "temperature": 0.7
-        }
-
-        print(
-            f"Sending request to Chutes AI with data: {json.dumps(request_data)}")
-        response = requests.post(
-            "https://llm.chutes.ai/v1/chat/completions",
-            headers=headers,
-            json=request_data,
-            verify=True
-        )
-
-        print(f"Response status code: {response.status_code}")
-        print(f"Response headers: {response.headers}")
-        print(f"Response content: {response.text}")
-
-        response.raise_for_status()
-        result = response.json()
-
-        # 检查响应格式
-        if 'choices' not in result or not result['choices']:
-            print(f"Unexpected response format: {result}")
-            return {'error': 'Unexpected response format from API'}, 500
-
-        # 获取第一个选择的内容
-        first_choice = result['choices'][0]
-        if 'message' not in first_choice or 'content' not in first_choice['message']:
-            print(f"Unexpected choice format: {first_choice}")
-            return {'error': 'Unexpected choice format from API'}, 500
-
-        content = first_choice['message']['content']
-        print(f"Successfully extracted content: {content}")
-
-        return {'response': content}, 200
-
-    except requests.exceptions.RequestException as e:
-        print(f"Request error in Chutes AI inference: {e}")
-        if hasattr(e, 'response'):
-            print(f"Response status code: {e.response.status_code}")
-            print(f"Response headers: {e.response.headers}")
-            print(f"Response content: {e.response.text}")
-        return {'error': f'Request error: {str(e)}'}, 500
-    except json.JSONDecodeError as e:
-        print(f"JSON decode error in Chutes AI inference: {e}")
-        print(f"Response content: {response.text}")
-        return {'error': f'Invalid JSON response: {str(e)}'}, 500
+        return {'response': json.dumps(result)}, 200
     except Exception as e:
-        print(f"Unexpected error in Chutes AI inference: {e}")
         return {'error': f'Unexpected error: {str(e)}'}, 500

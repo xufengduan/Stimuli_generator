@@ -617,17 +617,26 @@ function initializePage() {
 
 // Handle model switching function
 function handleModelChange() {
-    const selectedModel = modelChoice.value;
+    const modelSelect = document.getElementById('model_choice');
+    const customModelConfig = document.getElementById('custom_model_config');
+    const apiKeyInput = document.getElementById('api_key');
 
-    // If GPT-4o is selected, enable API Key input box
-    if (selectedModel === 'GPT-4o') {
+    if (modelSelect.value === 'custom') {
+        customModelConfig.style.display = 'block';
         apiKeyInput.disabled = false;
         apiKeyInput.required = true;
+        apiKeyInput.placeholder = 'Enter your API Key';
+    } else if (modelSelect.value === 'GPT-4o') {
+        customModelConfig.style.display = 'none';
+        apiKeyInput.disabled = false;
+        apiKeyInput.required = true;
+        apiKeyInput.placeholder = 'Enter your OpenAI API Key';
     } else {
-        // Otherwise disable API Key input box
+        customModelConfig.style.display = 'none';
         apiKeyInput.disabled = true;
         apiKeyInput.required = false;
-        apiKeyInput.value = ''; // Clear input
+        apiKeyInput.value = '';
+        apiKeyInput.placeholder = 'API Key not required';
     }
 }
 
@@ -661,6 +670,35 @@ function validateAutoGenerateInputs() {
     if (selectedModel === 'GPT-4o' && !apiKey) {
         alert('OpenAI API Key cannot be empty when using GPT-4o!');
         return false;
+    }
+
+    // If custom model is selected, check API Key, URL, and model name
+    if (selectedModel === 'custom') {
+        const apiUrl = document.getElementById('custom_api_url').value.trim();  // 修正字段ID
+        const modelName = document.getElementById('custom_model_name').value.trim();  // 添加模型名称验证
+        if (!apiKey) {
+            alert('API Key cannot be empty when using custom model!');
+            return false;
+        }
+        if (!modelName) {  // 添加模型名称验证
+            alert('Model Name cannot be empty when using custom model!');
+            return false;
+        }
+        if (!apiUrl) {
+            alert('API URL cannot be empty when using custom model!');
+            return false;
+        }
+
+        // Validate custom parameters if provided
+        const customParams = document.getElementById('custom_params').value.trim();
+        if (customParams) {
+            try {
+                JSON.parse(customParams);
+            } catch (e) {
+                alert('Invalid JSON in custom parameters!');
+                return false;
+            }
+        }
     }
 
     // Check experimental design
@@ -1171,6 +1209,35 @@ function validateInputs() {
         return false;
     }
 
+    // If custom model is selected, check API Key and URL
+    if (selectedModel === 'custom') {
+        const apiUrl = document.getElementById('custom_api_url').value.trim();  // 修正字段ID
+        const modelName = document.getElementById('custom_model_name').value.trim();  // 添加模型名称验证
+        if (!apiKey) {
+            alert('API Key cannot be empty when using custom model!');
+            return false;
+        }
+        if (!modelName) {  // 添加模型名称验证
+            alert('Model Name cannot be empty when using custom model!');
+            return false;
+        }
+        if (!apiUrl) {
+            alert('API URL cannot be empty when using custom model!');
+            return false;
+        }
+
+        // Validate custom parameters if provided
+        const customParams = document.getElementById('custom_params').value.trim();
+        if (customParams) {
+            try {
+                JSON.parse(customParams);
+            } catch (e) {
+                alert('Invalid JSON in custom parameters!');
+                return false;
+            }
+        }
+    }
+
     // Check inputs in Item tables
     const itemContainers = document.querySelectorAll('.item-container');
     for (let i = 0; i < itemContainers.length; i++) {
@@ -1382,6 +1449,22 @@ function startGeneration() {
         previousStimuli: previousStimuli,
         iteration: parseInt(document.getElementById('iteration').value)
     };
+
+    // Add custom model parameters if custom model is selected
+    if (settings.modelChoice === 'custom') {
+        settings.apiUrl = document.getElementById('custom_api_url').value.trim();
+        settings.modelName = document.getElementById('custom_model_name').value.trim();  // 修正字段ID
+        const customParams = document.getElementById('custom_params').value.trim();
+        if (customParams) {
+            try {
+                settings.params = JSON.parse(customParams);
+            } catch (e) {
+                alert('Invalid JSON in custom parameters!');
+                resetUI();
+                return;
+            }
+        }
+    }
 
     // Add request timeout control
     const fetchWithTimeout = (url, options, timeout = 10000) => {
@@ -1783,8 +1866,8 @@ function enableAllElements() {
 
     // Enable all dropdowns, text boxes, and text areas
     document.querySelectorAll('input, textarea, select').forEach(element => {
-        // Check if element is API key input box, and model selection is not GPT-4o
-        if (element.id === 'api_key' && modelChoice.value !== 'GPT-4o') {
+        // Check if element is API key input box, and model selection requires API key
+        if (element.id === 'api_key' && modelChoice.value !== 'GPT-4o' && modelChoice.value !== 'custom') {
             element.disabled = true; // Keep API key input box disabled
         } else {
             element.disabled = false;
@@ -1850,6 +1933,9 @@ autoGenerateButton.addEventListener('click', function () {
     } else if (selectedModel === 'meta-llama/Llama-3.3-70B-Instruct') {
         // Use Hugging Face API
         callHuggingFaceAPI(prompt);
+    } else if (selectedModel === 'custom') {
+        // Use custom model API
+        callcustomAPI(prompt);
     }
 });
 
@@ -1867,7 +1953,7 @@ function callOpenAIAPI(prompt) {
                     content: prompt
                 }
             ],
-            temperature: 0.7,
+
             max_tokens: 2000
         };
 
@@ -1975,6 +2061,49 @@ function callHuggingFaceAPI(prompt) {
         })
         .finally(() => {
             // Restore button state (but do not enable page elements in fallback case, as it will be handled in fallback function)
+            autoGenerateButton.disabled = false;
+            autoGenerateButton.innerText = "AutoGenerate properties";
+        });
+}
+
+
+// Add custom model API call function
+function callcustomAPI(prompt) {
+    const apiUrl = document.getElementById('custom_api_url').value.trim();
+    const apiKey = document.getElementById('api_key').value.trim();
+    const modelName = document.getElementById('custom_model_name').value.trim();
+
+    const requestBody = {
+        model: modelName,
+        messages: [
+            { role: "user", content: prompt }
+        ]
+    };
+
+    fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(requestBody)
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const content = data.choices[0].message.content;
+            processAPIResponse(content);
+        })
+        .catch(error => {
+            console.error('Custom model API call error:', error);
+            enableAllElements();
+            alert(`Custom model API call failed: ${error.message}`);
+        })
+        .finally(() => {
             autoGenerateButton.disabled = false;
             autoGenerateButton.innerText = "AutoGenerate properties";
         });
