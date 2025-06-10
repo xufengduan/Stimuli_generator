@@ -862,56 +862,7 @@ def cleanup_sessions():
             print(f"Cleaned up orphaned session {session_id} from memory.")
 
 
-# Add a new API endpoint for handling Hugging Face API call requests
-@app.route('/api/huggingface_inference', methods=['POST'])
-def huggingface_inference():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'status': 'error', 'message': 'Missing request data'}), 400
 
-        # Get the parameters from the request
-        prompt = data.get('prompt')
-        model = data.get('model')
-        session_id = data.get('session_id')
-
-        if not prompt or not model:
-            return jsonify({'status': 'error', 'message': 'Missing required parameters'}), 400
-
-        # import HuggingFace client
-        from huggingface_hub import InferenceClient
-
-        # Import the API key from backend.py
-        from .backend import HF_API_KEY
-
-        # Create the client
-        client = InferenceClient(
-            model,
-            token=HF_API_KEY,
-            # Disable cache, ensure new responses
-            headers={"x-use-cache": "false"}
-        )
-
-        # Build the message
-        messages = [{"role": "user", "content": prompt}]
-
-        # Call the API
-        response = client.chat_completion(
-            messages=messages
-        )
-
-        # Extract the response content
-        content = response.choices[0].message.content
-
-        return jsonify({
-            'status': 'success',
-            'response': content
-        })
-    except ImportError as e:
-        return jsonify({'status': 'error', 'message': f'Import error: {str(e)}'}), 500
-    except Exception as e:
-        print(f"Error in huggingface_inference API: {str(e)}")
-        return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
 
 # Add error handlers for Socket.IO

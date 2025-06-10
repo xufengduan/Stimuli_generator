@@ -633,10 +633,9 @@ function handleModelChange() {
         apiKeyInput.placeholder = 'Enter your OpenAI API Key';
     } else {
         customModelConfig.style.display = 'none';
-        apiKeyInput.disabled = true;
-        apiKeyInput.required = false;
-        apiKeyInput.value = '';
-        apiKeyInput.placeholder = 'API Key not required';
+        apiKeyInput.disabled = false;
+        apiKeyInput.required = true;
+        apiKeyInput.placeholder = 'API Key required';
     }
 }
 
@@ -1492,7 +1491,7 @@ function startGeneration() {
         }, 15000)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText}`);
+                    throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText}. Please try again later.`);
                 }
                 return response.json();
             })
@@ -1654,7 +1653,7 @@ function checkGenerationStatus() {
             } else {
                 // Handle unknown status
                 console.error("Unknown status received:", data.status);
-                alert("Received unexpected status from server. Generation may have failed.");
+                alert("Received unexpected status from server. Generation may have failed. Please try again later.");
                 resetUI();
             }
         })
@@ -1697,7 +1696,7 @@ stopButton.addEventListener('click', () => {
             })
             .catch(error => {
                 console.error('Error stopping generation:', error);
-                alert('Failed to stop generation. Please try again in a few seconds or refresh the page.');
+                alert('Failed to stop generation. Please try again in a few seconds.');
             });
     }
     // If user clicks "No", do nothing
@@ -1930,9 +1929,6 @@ autoGenerateButton.addEventListener('click', function () {
     if (selectedModel === 'GPT-4o') {
         // Use OpenAI API
         callOpenAIAPI(prompt);
-    } else if (selectedModel === 'meta-llama/Llama-3.3-70B-Instruct') {
-        // Use Hugging Face API
-        callHuggingFaceAPI(prompt);
     } else if (selectedModel === 'custom') {
         // Use custom model API
         callcustomAPI(prompt);
@@ -1969,7 +1965,7 @@ function callOpenAIAPI(prompt) {
             .then(response => {
                 // Check response status
                 if (!response.ok) {
-                    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText}. Please try again later.`);
                 }
                 return response.json();
             })
@@ -1995,7 +1991,7 @@ function callOpenAIAPI(prompt) {
                 clearSafetyTimeout();
                 // Ensure page is not locked
                 enableAllElements();
-                alert(`OpenAI API call failed: ${error.message}`);
+                alert(`OpenAI API call failed: ${error.message}. Please check your input is correct and try again later.`);
             })
             .finally(() => {
                 // Restore button state
@@ -2013,69 +2009,7 @@ function callOpenAIAPI(prompt) {
     }
 }
 
-// Modify Hugging Face API call function, enable page elements when successful or failed
-function callHuggingFaceAPI(prompt) {
-    // Prepare request body
-    const requestBody = {
-        session_id: sessionId,
-        prompt: prompt,
-        model: "meta-llama/Llama-3.3-70B-Instruct"
-    };
 
-    // Send API request to the backend
-    fetch('/api/huggingface_inference', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-    })
-        .then(response => {
-            // Check response status
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Clear safety timeout when API call succeeds
-            clearSafetyTimeout();
-            
-            // Process API response
-            const content = data.response;
-            processAPIResponse(content);
-        })
-        .catch(error => {
-            console.error('Hugging Face API call error:', error);
-
-            // If there is no backend API, use fallback method
-            if (error.message.includes('404')) {
-                try {
-                    // Try to call OpenAI directly to get example properties
-                    callOpenAIFallback(prompt);
-                } catch (fallbackError) {
-                    // If fallback also fails, ensure all elements are enabled
-                    console.error('OpenAI fallback error:', fallbackError);
-                    clearSafetyTimeout();
-                    enableAllElements();
-                    autoGenerateButton.disabled = false;
-                    autoGenerateButton.innerText = "AutoGenerate properties";
-                    alert(`Both API calls failed. Please try again later.`);
-                }
-                return;
-            }
-
-            // For other types of errors, display error message and enable page elements
-            clearSafetyTimeout();
-            alert(`Hugging Face API call failed: ${error.message}`);
-            enableAllElements();
-        })
-        .finally(() => {
-            // Restore button state (but do not enable page elements in fallback case, as it will be handled in fallback function)
-            autoGenerateButton.disabled = false;
-            autoGenerateButton.innerText = "AutoGenerate properties";
-        });
-}
 
 
 // Add custom model API call function
@@ -2101,7 +2035,7 @@ function callcustomAPI(prompt) {
     })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                throw new Error(`API request failed: ${response.status} ${response.statusText}. Please check your input is correct and try again later.`);
             }
             return response.json();
         })
@@ -2116,7 +2050,7 @@ function callcustomAPI(prompt) {
             console.error('Custom model API call error:', error);
             clearSafetyTimeout();
             enableAllElements();
-            alert(`Custom model API call failed: ${error.message}`);
+            alert(`Custom model API call failed: ${error.message}. Please check your input is correct and try again later.`);
         })
         .finally(() => {
             autoGenerateButton.disabled = false;
@@ -2124,41 +2058,7 @@ function callcustomAPI(prompt) {
         });
 }
 
-// Modify fallback method, ensure all elements are enabled when complete
-function callOpenAIFallback(prompt) {
-    // First remove current overlay, as it will cause freezing after alert
-    enableAllElements();
 
-    alert("Will use OpenAI API as fallback. Please make sure you provide a valid OpenAI API key.");
-
-    // Prompt user to enter OpenAI API key
-    const apiKey = window.prompt("Please enter your OpenAI API Key:");
-    if (!apiKey || apiKey.trim() === '') {
-        alert("No API key provided, cannot continue.");
-
-        // Restore button state
-        autoGenerateButton.disabled = false;
-        autoGenerateButton.innerText = "AutoGenerate properties";
-
-        // Enable all elements on the page (although they were enabled at the start, confirm again here)
-        enableAllElements();
-        return;
-    }
-
-    // Re-disable page elements, as a new API call is about to start
-    disableAllElements();
-
-    // Enable API key input box and set value
-    const apiKeyInput = document.getElementById('api_key');
-    apiKeyInput.disabled = false;
-    apiKeyInput.value = apiKey;
-
-    // Change model selection to GPT-4o
-    modelChoice.value = 'GPT-4o';
-
-    // Call OpenAI API
-    callOpenAIAPI(prompt);
-}
 
 // Process API response
 function processAPIResponse(response) {
@@ -2233,7 +2133,7 @@ function processAPIResponse(response) {
         if (Object.keys(requirements).length === 0 || Object.keys(scoringDimensions).length === 0) {
             // First enable all elements, then display error message
             enableAllElements();
-            throw new Error("Could not extract valid Requirements or Scoring Dimensions from API response");
+            throw new Error("Could not extract valid Requirements or Scoring Dimensions from API response, please try again.");
         }
 
         // Fill validator table
@@ -2252,7 +2152,7 @@ function processAPIResponse(response) {
         clearSafetyTimeout();
         // Ensure all elements are enabled regardless
         enableAllElements();
-        alert(`Failed to process API response: ${error.message}`);
+        alert(`Failed to process API response: ${error.message}. Please try again later.`);
     }
 }
 

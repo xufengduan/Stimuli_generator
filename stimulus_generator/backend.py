@@ -1,7 +1,7 @@
 import openai
 import pandas as pd
 import json
-from huggingface_hub import InferenceClient
+
 import time
 import random
 import requests
@@ -11,10 +11,7 @@ from abc import ABC, abstractmethod
 # Set OpenAI API key
 openai.api_key = ""
 
-# Set Hugging Face API key
-# HF_API_KEY = "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"
-
-# Set Chutes AI API key
+# Set Chutes AI API key (commented out)
 # CHUTES_API_KEY = "cpk_e73d5c0b2dac43eda7a2ff5f4f2ce7e3.f0d133ebd53754df89d851d4ac103b2a.3yhG3q88cAc2AAb430KPiUmhlFLCBfvh"
 
 # ======================
@@ -121,57 +118,7 @@ class OpenAIClient(ModelClient):
         return {"model": "gpt-4o"}
 
 
-class HuggingFaceClient(ModelClient):
-    """Hugging Face model client"""
 
-    def __init__(self, api_key):
-        self.api_key = api_key
-
-    def generate_completion(self, prompt, properties, params=None):
-        """Generate completion using Hugging Face API"""
-        if params is None:
-            params = self.get_default_params()
-
-        # Create HF InferenceClient with required headers
-        client = InferenceClient(
-            params["model"],
-            token=self.api_key,
-            headers={"x-use-cache": "false"}  # 确保包含此header
-        )
-
-        response_format = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "response_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": list(properties.keys()),
-                    "additionalProperties": False
-                }
-            }
-        }
-
-        messages = [{"role": "user", "content": prompt}]
-
-        response = client.chat_completion(
-            messages=messages,
-            response_format=response_format,
-            max_tokens=params.get("max_tokens", 1000),
-            temperature=params.get("temperature", 0.7)
-        )
-
-        try:
-            content = response.choices[0].message.content
-            return json.loads(content)
-        except (json.JSONDecodeError, AttributeError, IndexError) as e:
-            print(f"Failed to parse HuggingFace JSON response: {e}")
-            return {"error": "Failed to parse response"}
-
-    def get_default_params(self):
-        return {
-            "model": "meta-llama/Llama-3.3-70B-Instruct",
-        }
 
 
 class CustomModelClient(ModelClient):
@@ -252,8 +199,8 @@ def create_model_client(model_choice, settings=None):
             api_key=settings.get('api_key'),
             model_name=settings.get('modelName')
         )
-    else:  # Hugging Face models
-        return HuggingFaceClient()
+    else:
+        raise ValueError(f"Unsupported model choice: {model_choice}")
 
 
 # ======================
