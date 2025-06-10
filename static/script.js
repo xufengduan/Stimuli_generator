@@ -1965,7 +1965,7 @@ function callOpenAIAPI(prompt) {
             .then(response => {
                 // Check response status
                 if (!response.ok) {
-                    throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}.`);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}`);
                 }
                 return response.json();
             })
@@ -2035,7 +2035,7 @@ function callcustomAPI(prompt) {
     })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}.`);
+                throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}`);
             }
             return response.json();
         })
