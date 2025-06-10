@@ -1491,7 +1491,7 @@ function startGeneration() {
         }, 15000)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText}. Please try again later.`);
+                    throw new Error(`Failed to start stimulus generation: ${response.status} ${response.statusText.trim()}.`);
                 }
                 return response.json();
             })
@@ -1965,7 +1965,7 @@ function callOpenAIAPI(prompt) {
             .then(response => {
                 // Check response status
                 if (!response.ok) {
-                    throw new Error(`API request failed: ${response.status} ${response.statusText}. Please try again later.`);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}.`);
                 }
                 return response.json();
             })
@@ -2035,7 +2035,7 @@ function callcustomAPI(prompt) {
     })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText}. Please check your input is correct and try again later.`);
+                throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}.`);
             }
             return response.json();
         })
@@ -2133,7 +2133,7 @@ function processAPIResponse(response) {
         if (Object.keys(requirements).length === 0 || Object.keys(scoringDimensions).length === 0) {
             // First enable all elements, then display error message
             enableAllElements();
-            throw new Error("Could not extract valid Requirements or Scoring Dimensions from API response, please try again.");
+            throw new Error("Could not extract valid Requirements or Scoring Dimensions from API response.");
         }
 
         // Fill validator table
