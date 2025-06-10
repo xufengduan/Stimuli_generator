@@ -1974,6 +1974,9 @@ function callOpenAIAPI(prompt) {
                 return response.json();
             })
             .then(data => {
+                // Clear safety timeout when API call succeeds
+                clearSafetyTimeout();
+                
                 // Process API response
                 const content = data.choices[0].message.content;
                 // Wrap processing in try-catch
@@ -1988,6 +1991,8 @@ function callOpenAIAPI(prompt) {
             })
             .catch(error => {
                 console.error('OpenAI API call error:', error);
+                // Clear safety timeout when API call fails
+                clearSafetyTimeout();
                 // Ensure page is not locked
                 enableAllElements();
                 alert(`OpenAI API call failed: ${error.message}`);
@@ -2000,6 +2005,7 @@ function callOpenAIAPI(prompt) {
     } catch (error) {
         // Catch any errors that occur before setting up or executing API call
         console.error('Error setting up API call:', error);
+        clearSafetyTimeout();
         enableAllElements();
         autoGenerateButton.disabled = false;
         autoGenerateButton.innerText = "AutoGenerate properties";
@@ -2032,6 +2038,9 @@ function callHuggingFaceAPI(prompt) {
             return response.json();
         })
         .then(data => {
+            // Clear safety timeout when API call succeeds
+            clearSafetyTimeout();
+            
             // Process API response
             const content = data.response;
             processAPIResponse(content);
@@ -2047,6 +2056,7 @@ function callHuggingFaceAPI(prompt) {
                 } catch (fallbackError) {
                     // If fallback also fails, ensure all elements are enabled
                     console.error('OpenAI fallback error:', fallbackError);
+                    clearSafetyTimeout();
                     enableAllElements();
                     autoGenerateButton.disabled = false;
                     autoGenerateButton.innerText = "AutoGenerate properties";
@@ -2056,6 +2066,7 @@ function callHuggingFaceAPI(prompt) {
             }
 
             // For other types of errors, display error message and enable page elements
+            clearSafetyTimeout();
             alert(`Hugging Face API call failed: ${error.message}`);
             enableAllElements();
         })
@@ -2095,11 +2106,15 @@ function callcustomAPI(prompt) {
             return response.json();
         })
         .then(data => {
+            // Clear safety timeout when API call succeeds
+            clearSafetyTimeout();
+            
             const content = data.choices[0].message.content;
             processAPIResponse(content);
         })
         .catch(error => {
             console.error('Custom model API call error:', error);
+            clearSafetyTimeout();
             enableAllElements();
             alert(`Custom model API call failed: ${error.message}`);
         })
@@ -2149,6 +2164,9 @@ function callOpenAIFallback(prompt) {
 function processAPIResponse(response) {
     try {
         console.log("API response:", response);
+
+        // Clear safety timeout when starting to process response
+        clearSafetyTimeout();
 
         // Extract Requirements dictionary
         const requirementsMatch = response.match(/Requirements:\s*\{([^}]+)\}/s);
@@ -2230,6 +2248,8 @@ function processAPIResponse(response) {
         alert("Auto-generation complete! Please carefully review the content in the Validator and Scorer tables to ensure they meet your experimental design requirements.");
     } catch (error) {
         console.error("Error processing API response:", error);
+        // Clear safety timeout even on error
+        clearSafetyTimeout();
         // Ensure all elements are enabled regardless
         enableAllElements();
         alert(`Failed to process API response: ${error.message}`);
@@ -2406,6 +2426,7 @@ window.addEventListener('error', function (event) {
     const overlay = document.getElementById('page-overlay');
     if (overlay && document.body.contains(overlay)) {
         console.warn('Detected global error, removing possibly frozen page overlay');
+        clearSafetyTimeout();
         document.body.removeChild(overlay);
 
         // Restore normal page interaction
@@ -2413,7 +2434,7 @@ window.addEventListener('error', function (event) {
     }
 });
 
-// Add safety timeout, ensure page is unlocked after 30 seconds
+// Add safety timeout, ensure page is unlocked after 90 seconds
 function startSafetyTimeout() {
     console.log('Starting safety timeout');
     window.safetyTimeoutId = setTimeout(function () {
@@ -2425,7 +2446,7 @@ function startSafetyTimeout() {
             autoGenerateButton.disabled = false;
             autoGenerateButton.innerText = "AutoGenerate properties";
         }
-    }, 30000); // 30 second timeout
+    }, 90000); // 90 second timeout
 }
 
 function clearSafetyTimeout() {
@@ -2469,7 +2490,7 @@ function disableUI() {
     }
 
     window.uiProtectionTimeout = setTimeout(() => {
-        console.warn("UI protection timeout triggered - interface will automatically restore after 30 seconds");
+        console.warn("UI protection timeout triggered - interface will automatically restore after 90 seconds");
         enableUI();
 
         // Remove overlay (if it exists)
@@ -2480,7 +2501,7 @@ function disableUI() {
 
         // Display warning message
         alert("Operation timed out. If you are waiting for the generation result, please try again later.");
-    }, 30000); // 30 second timeout
+    }, 90000); // 90 second timeout
 }
 
 // Modify enableUI function to clear timeout protection
@@ -2540,33 +2561,7 @@ function createPageOverlay(message) {
     loadingText.textContent = message || 'Loading...';
     overlay.appendChild(loadingText);
 
-    // Create cancel button (allow user to cancel after long loading)
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    cancelButton.className = 'cancel-button';
-    cancelButton.style.marginTop = '20px';
-    cancelButton.style.padding = '8px 16px';
-    cancelButton.style.background = 'linear-gradient(135deg, #FF6B6B, #FF4C4C)';
-    cancelButton.style.border = 'none';
-    cancelButton.style.borderRadius = '5px';
-    cancelButton.style.color = 'white';
-    cancelButton.style.cursor = 'pointer';
-
-    // Add click event
-    cancelButton.addEventListener('click', function () {
-        console.log("User clicked cancel button, restoring UI");
-        enableUI();
-    });
-
-    // Show cancel button after 15 seconds (short operations do not need to show, to avoid UI flickering)
-    setTimeout(() => {
-        if (document.body.contains(overlay)) {
-            overlay.appendChild(cancelButton);
-        }
-    }, 15000);
-
     // Add to page
     document.body.appendChild(overlay);
-
     return overlay;
 }
