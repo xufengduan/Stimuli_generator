@@ -79,13 +79,13 @@ Requirements:
 
 Scoring Dimensions:
 {
-  "unpredictability_neutral": "Degree to which the neutral context fails to predict the target (higher = more unpredictable)",
-  "predictability_supportive": "Degree to which the supportive context cues the target (higher = more predictable)",
-  "word_pair_frequency": "Frequency with which the two words are used interchangeably",
-  "word_frequency_short": "Corpus frequency of the short word",
-  "word_frequency_long": "Corpus frequency of the long word",
-  "neutral_context_plausibility": "Realism and coherence of the neutral context",
-  "supportive_context_plausibility": "Realism and coherence of the supportive context"
+  "unpredictability_neutral": "Degree to which the neutral context fails to predict the target (higher = more unpredictable; from 0 to 10)",
+  "predictability_supportive": "Degree to which the supportive context cues the target (higher = more predictable; from 0 to 10)",
+  "word_pair_frequency": "Frequency with which the two words are used interchangeably(higher = more frequent; from 0 to 10)",
+  "word_frequency_short": "Corpus frequency of the short word(higher = more frequent; from 0 to 10)",
+  "word_frequency_long": "Corpus frequency of the long word(higher = more frequent; from 0 to 10)",
+  "neutral_context_plausibility": "Realism and coherence of the neutral context(higher = more plausible; from 0 to 10)",
+  "supportive_context_plausibility": "Realism and coherence of the supportive context(higher = more plausible; from 0 to 10)"
 }
 </Example>
 
@@ -1407,7 +1407,7 @@ function startGeneration() {
     // Add Overall field
     agent2Properties["Overall"] = {
         "type": "string",
-        "description": "If the new stimuli result in 'True' for all criteria.",
+        "description": "Did all the criteria pass (value is True)?",
         "enum": ["passed", "failed"]
     };
 
@@ -1431,12 +1431,6 @@ function startGeneration() {
             };
         }
     });
-
-    // Add total_score
-    agent3Properties["total_score"] = {
-        "type": "integer",
-        "description": "The total score for all dimensions"
-    };
 
     const settings = {
         agent1Properties: JSON.stringify(agent1Properties),

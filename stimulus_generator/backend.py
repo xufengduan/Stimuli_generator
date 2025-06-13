@@ -7,12 +7,53 @@ import random
 import requests
 from flask import request, jsonify
 from abc import ABC, abstractmethod
+import threading
+import multiprocessing
+from multiprocessing import Process, Queue
+import queue
 
 # Set OpenAI API key
 openai.api_key = ""
 
 # Set Chutes AI API key (commented out)
 # CHUTES_API_KEY = "cpk_e73d5c0b2dac43eda7a2ff5f4f2ce7e3.f0d133ebd53754df89d851d4ac103b2a.3yhG3q88cAc2AAb430KPiUmhlFLCBfvh"
+
+# 使用multiprocessing实现真正的超时机制
+
+
+def _timeout_target(queue, func, args, kwargs):
+    """multiprocessing的目标函数，必须在模块级别定义才能被pickle"""
+    try:
+        result = func(*args, **kwargs)
+        queue.put(('success', result))
+    except Exception as e:
+        queue.put(('error', str(e)))
+
+
+def call_with_timeout(func, args, kwargs, timeout_seconds=60):
+    """使用multiprocessing实现API调用超时，可以强制终止"""
+    queue = Queue()
+    process = Process(target=_timeout_target, args=(queue, func, args, kwargs))
+    process.start()
+    process.join(timeout_seconds)
+
+    if process.is_alive():
+        # 强制终止进程
+        process.terminate()
+        process.join()
+        print(
+            f"API call timed out after {timeout_seconds} seconds and process was terminated")
+        return {"error": f"API call timed out after {timeout_seconds} seconds"}
+
+    try:
+        result_type, result = queue.get_nowait()
+        if result_type == 'success':
+            return result
+        else:
+            return {"error": result}
+    except queue.Empty:
+        return {"error": "Process completed but no result returned"}
+
 
 # ======================
 # 1. Configuration (Prompt + Schema)
@@ -46,7 +87,7 @@ Please rate the following STIMULUS based on the Experimental stimuli design prov
 STIMULUS: {valid_stimulus}
 Experimental stimuli design: {experiment_design}
 
-Please return in JSON format, including the score for each dimension and the total score for all dimensions.
+Please return in JSON format including the score for each dimension.
 """
 
 # ---- Agent 1 Stimulus Schema ----
@@ -86,12 +127,9 @@ class OpenAIClient(ModelClient):
         if api_key:
             openai.api_key = api_key
 
-    def generate_completion(self, prompt, properties, params=None):
-        """Generate completion using OpenAI API"""
-        if params is None:
-            params = self.get_default_params()
-
-        response = openai.ChatCompletion.create(
+    def _api_call(self, prompt, properties, params):
+        """API调用函数，会被multiprocessing调用"""
+        return openai.ChatCompletion.create(
             model=params["model"],
             messages=[{"role": "user", "content": prompt}],
             response_format={
@@ -108,17 +146,107 @@ class OpenAIClient(ModelClient):
             }
         )
 
-        try:
-            return json.loads(response['choices'][0]['message']['content'])
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse OpenAI JSON response: {e}")
-            return {"error": "Failed to parse response"}
+    def generate_completion(self, prompt, properties, params=None):
+        """Generate completion using OpenAI API"""
+        if params is None:
+            params = self.get_default_params()
+
+        # 重试机制
+        for attempt in range(3):
+            try:
+                response = call_with_timeout(
+                    self._api_call, (prompt, properties, params), {}, 60)
+
+                if isinstance(response, dict) and "error" in response:
+                    print(f"OpenAI API timeout attempt {attempt + 1}/3")
+                    if attempt == 2:  # 最后一次尝试
+                        return {"error": "API timeout after 3 attempts"}
+                    time.sleep(2 ** attempt)  # 指数退避
+                    continue
+
+                return json.loads(response['choices'][0]['message']['content'])
+            except json.JSONDecodeError as e:
+                print(f"Failed to parse OpenAI JSON response: {e}")
+                return {"error": "Failed to parse response"}
+            except Exception as e:
+                print(f"OpenAI API error attempt {attempt + 1}/3: {e}")
+                if attempt == 2:
+                    return {"error": f"API error after 3 attempts: {str(e)}"}
+                time.sleep(2 ** attempt)
 
     def get_default_params(self):
         return {"model": "gpt-4o"}
 
 
+# class HuggingFaceClient(ModelClient):
+#     """Hugging Face model client"""
 
+#     def __init__(self, api_key):
+#         self.api_key = api_key
+
+#     def _api_call(self, messages, response_format, params):
+#         """API调用函数，会被multiprocessing调用"""
+#         client = InferenceClient(
+#             params["model"],
+#             token=self.api_key,
+#             headers={"x-use-cache": "false"}
+#         )
+
+#         return client.chat_completion(
+#             messages=messages,
+#             response_format=response_format,
+#             max_tokens=params.get("max_tokens", 1000),
+#             temperature=params.get("temperature", 0.7)
+#         )
+
+#     def generate_completion(self, prompt, properties, params=None):
+#         """Generate completion using Hugging Face API"""
+#         if params is None:
+#             params = self.get_default_params()
+
+#         response_format = {
+#             "type": "json_schema",
+#             "json_schema": {
+#                 "name": "response_schema",
+#                 "schema": {
+#                     "type": "object",
+#                     "properties": properties,
+#                     "required": list(properties.keys()),
+#                     "additionalProperties": False
+#                 }
+#             }
+#         }
+
+#         messages = [{"role": "user", "content": prompt}]
+
+#         # 重试机制
+#         for attempt in range(3):
+#             try:
+#                 response = call_with_timeout(
+#                     self._api_call, (messages, response_format, params), {}, 60)
+
+#                 if isinstance(response, dict) and "error" in response:
+#                     print(f"HuggingFace API timeout attempt {attempt + 1}/3")
+#                     if attempt == 2:
+#                         return {"error": "API timeout after 3 attempts"}
+#                     time.sleep(2 ** attempt)
+#                     continue
+
+#                 content = response.choices[0].message.content
+#                 return json.loads(content)
+#             except (json.JSONDecodeError, AttributeError, IndexError) as e:
+#                 print(f"Failed to parse HuggingFace JSON response: {e}")
+#                 return {"error": "Failed to parse response"}
+#             except Exception as e:
+#                 print(f"HuggingFace API error attempt {attempt + 1}/3: {e}")
+#                 if attempt == 2:
+#                     return {"error": f"API error after 3 attempts: {str(e)}"}
+#                 time.sleep(2 ** attempt)
+
+#     def get_default_params(self):
+#         return {
+#             "model": "meta-llama/Llama-3.3-70B-Instruct",
+#         }
 
 
 class CustomModelClient(ModelClient):
@@ -128,6 +256,17 @@ class CustomModelClient(ModelClient):
         self.api_url = api_url
         self.api_key = api_key
         self.model_name = model_name
+
+    def _api_call(self, request_data, headers):
+        """API调用函数，会被multiprocessing调用"""
+        response = requests.post(
+            self.api_url,
+            headers=headers,
+            json=request_data,
+            timeout=60  # requests自己的超时
+        )
+        response.raise_for_status()
+        return response.json()
 
     def generate_completion(self, prompt, properties, params=None):
 
@@ -158,25 +297,37 @@ class CustomModelClient(ModelClient):
             "Content-Type": "application/json"
         }
 
-        try:
-            print("Sending request to Chutes with:",
-                  json.dumps(request_data, indent=2))
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=request_data
-            )
-            response.raise_for_status()
+        # 重试机制
+        for attempt in range(3):
+            try:
+                print("Sending request to Custom API with:",
+                      json.dumps(request_data, indent=2))
 
-            result = response.json()
-            print("Response from Chutes:", json.dumps(result, indent=2))
+                result = call_with_timeout(
+                    self._api_call, (request_data, headers), {}, 60)
 
-            content = result["choices"][0]["message"]["content"]
-            return json.loads(content)
+                if isinstance(result, dict) and "error" in result:
+                    print(f"Custom API timeout attempt {attempt + 1}/3")
+                    if attempt == 2:
+                        return {"error": "API timeout after 3 attempts"}
+                    time.sleep(2 ** attempt)
+                    continue
 
-        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
-            print(f"Failed to call Chutes API: {e}")
-            return {"error": f"Failed to get valid response: {str(e)}"}
+                print("Response from Custom API:",
+                      json.dumps(result, indent=2))
+                content = result["choices"][0]["message"]["content"]
+                return json.loads(content)
+
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"Custom API parsing error attempt {attempt + 1}/3: {e}")
+                if attempt == 2:
+                    return {"error": f"API parsing error after 3 attempts: {str(e)}"}
+                time.sleep(2 ** attempt)
+            except Exception as e:
+                print(f"Custom API error attempt {attempt + 1}/3: {e}")
+                if attempt == 2:
+                    return {"error": f"API error after 3 attempts: {str(e)}"}
+                time.sleep(2 ** attempt)
 
     def get_default_params(self):
         return {
@@ -199,6 +350,9 @@ def create_model_client(model_choice, settings=None):
             api_key=settings.get('api_key'),
             model_name=settings.get('modelName')
         )
+    # elif model_choice == 'HuggingFace':
+    #     api_key = settings.get('api_key')
+    #     return HuggingFaceClient(api_key)
     else:
         raise ValueError(f"Unsupported model choice: {model_choice}")
 
@@ -311,8 +465,8 @@ def agent_3_score_stimulus(
     Agent 3: Score experimental stimulus using the provided model client
     """
     if stop_event and stop_event.is_set():
-        print("Generation stopped by user in agent_3_score_stimulus.")
-        return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
+        print("Generation stopped by user after API call in agent_3_score_stimulus.")
+        return {field: 0 for field in properties.keys()} if properties else {}
 
     prompt = prompt_template.format(
         experiment_design=experiment_design,
@@ -322,10 +476,9 @@ def agent_3_score_stimulus(
     try:
         result = model_client.generate_completion(prompt, properties, params)
 
-        # Check stop event again
         if stop_event and stop_event.is_set():
             print("Generation stopped by user after API call in agent_3_score_stimulus.")
-            return {field: 0 for field in properties.keys()} if properties else {"total_score": 0}
+            return {field: 0 for field in properties.keys()} if properties else {}
 
         if "error" in result:
             return {field: 0 for field in properties.keys()}
@@ -524,25 +677,64 @@ def generate_stimuli(settings):
                 if check_stop("Generation stopped after 'Validator'."):
                     return None, None
 
-                # Check if validation passed
+                # Check if validation passed - Enhanced validation logic
+                # First check individual validation fields
+                validation_failed = False
+                failed_fields = []
+
+                for key, value in validation_result.items():
+                    if key != 'Overall' and not value:
+                        validation_failed = True
+                        failed_fields.append(key)
+                        print(
+                            f"Validation failed for {key}: {value}, regenerating...")
+                        if websocket_callback:
+                            websocket_callback(
+                                "validator", f"Validation failed for {key}: {value}, regenerating...")
+
+                # If any individual field failed, regenerate
+                if validation_failed:
+                    validation_fails += 1
+                    if ablation["use_agent_2"]:
+                        print(
+                            f"Failed validation for fields: {failed_fields}, regenerating...")
+                        if websocket_callback:
+                            websocket_callback(
+                                "validator", f"Failed validation for fields: {failed_fields}, regenerating...")
+                        continue
+                    else:
+                        print(
+                            "Ablation: Skipping Agent 2 (Individual Field Validation)")
+                        if websocket_callback:
+                            websocket_callback(
+                                "validator", "Ablation: Skipping Agent 2 (Individual Field Validation)")
+                        update_progress(iteration_num + 1)
+                        break
+
+                # Then check Overall field
                 if validation_result.get('Overall') == 'failed':
                     validation_fails += 1
 
                     if ablation["use_agent_2"]:
-                        print("Failed to validate, regenerating...")
+                        print("Failed to validate (Overall), regenerating...")
                         if websocket_callback:
                             websocket_callback(
-                                "validator", "Failed to validate, regenerating...")
+                                "validator", "Failed to validate (Overall), regenerating...")
                         continue
                     else:
                         print(
-                            "Ablation: Skipping Agent 2 (Validation and Repetition Check)")
+                            "Ablation: Skipping Agent 2 (Overall Validation)")
                         if websocket_callback:
                             websocket_callback(
-                                "validator", "Ablation: Skipping Agent 2")
+                                "validator", "Ablation: Skipping Agent 2 (Overall Validation)")
                         update_progress(iteration_num + 1)
                         break
                 else:
+                    # All validations passed
+                    print("All validations passed, proceeding to next step...")
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", "All validations passed, proceeding to next step...")
                     update_progress(iteration_num + 1)
                     break
 

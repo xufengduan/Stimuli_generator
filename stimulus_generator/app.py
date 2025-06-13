@@ -374,7 +374,7 @@ def generate_stimulus(session_id):
                 # Generate data
                 settings["ablation"] = {
                     "use_agent_2": False,
-                    "use_agent_3": False
+                    "use_agent_3": True
                 }
                 df, filename = generate_stimuli(settings)
 
@@ -451,10 +451,30 @@ def generate_stimulus(session_id):
                 save_session(session_id, session_state)
 
         # Create and start the generation thread
+        # Final verification before starting new thread
+        with sessions_lock:
+            if session_id in active_sessions:
+                old_thread = session_state.get('generation_thread')
+                if old_thread and old_thread.is_alive():
+                    error_msg = f"Session {session_id} - Cannot start new generation: old thread is still running"
+                    print(error_msg)
+                    return jsonify({'status': 'error', 'message': 'Previous generation is still running. Please wait and try again.'}), 409
+
         session_state['generation_thread'] = Thread(target=run_generation)
         # Set as a daemon thread
         session_state['generation_thread'].daemon = True
+
+        # Add thread information for debugging
+        thread_id = session_state['generation_thread'].ident
+        print(
+            f"Session {session_id} - Starting new generation thread (ID will be available after start)")
+
         session_state['generation_thread'].start()
+
+        # Get actual thread ID after start
+        actual_thread_id = session_state['generation_thread'].ident
+        print(
+            f"Session {session_id} - New generation thread started with ID: {actual_thread_id}")
 
         return jsonify({
             'status': 'success',
