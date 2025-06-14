@@ -421,7 +421,6 @@ def agent_2_validate_stimulus(
         experiment_design,
         properties,
         prompt_template=AGENT_2_PROMPT_TEMPLATE,
-        params=None,
         stop_event=None):
     """
     Agent 2: Validate experimental stimulus using the provided model client
@@ -436,7 +435,10 @@ def agent_2_validate_stimulus(
     )
 
     try:
-        result = model_client.generate_completion(prompt, properties, params)
+        # 使用固定的temperature=0参数
+        fixed_params = {"temperature": 0}
+        result = model_client.generate_completion(
+            prompt, properties, fixed_params)
 
         # Check stop event again
         if stop_event and stop_event.is_set():
@@ -459,7 +461,6 @@ def agent_3_score_stimulus(
         experiment_design,
         properties,
         prompt_template=AGENT_3_PROMPT_TEMPLATE,
-        params=None,
         stop_event=None):
     """
     Agent 3: Score experimental stimulus using the provided model client
@@ -474,7 +475,10 @@ def agent_3_score_stimulus(
     )
 
     try:
-        result = model_client.generate_completion(prompt, properties, params)
+        # 使用固定的temperature=0参数
+        fixed_params = {"temperature": 0}
+        result = model_client.generate_completion(
+            prompt, properties, fixed_params)
 
         if stop_event and stop_event.is_set():
             print("Generation stopped by user after API call in agent_3_score_stimulus.")
@@ -661,7 +665,6 @@ def generate_stimuli(settings):
                     experiment_design=experiment_design,
                     properties=agent_2_properties,
                     prompt_template=AGENT_2_PROMPT_TEMPLATE,
-                    params=custom_params,
                     stop_event=stop_event
                 )
 
@@ -782,7 +785,6 @@ def generate_stimuli(settings):
                     experiment_design=experiment_design,
                     properties=agent_3_properties,
                     prompt_template=AGENT_3_PROMPT_TEMPLATE,
-                    params=custom_params,
                     stop_event=stop_event
                 )
 
