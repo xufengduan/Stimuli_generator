@@ -1404,12 +1404,7 @@ function startGeneration() {
         }
     });
 
-    // Add Overall field
-    agent2Properties["Overall"] = {
-        "type": "string",
-        "description": "Did all the criteria pass (value is True)?",
-        "enum": ["passed", "failed"]
-    };
+
 
     // Get agent3_properties
     const agent3PropertiesTable = document.getElementById('agent3PropertiesTable');

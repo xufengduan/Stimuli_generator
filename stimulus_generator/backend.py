@@ -439,7 +439,7 @@ def agent_2_validate_stimulus(
     """
     if stop_event and stop_event.is_set():
         print("Generation stopped by user in agent_2_validate_stimulus.")
-        return {"Overall": "failed", "reason": "Stopped by user"}
+        return {"error": "Stopped by user"}
 
     prompt = prompt_template.format(
         experiment_design=experiment_design,
@@ -447,8 +447,9 @@ def agent_2_validate_stimulus(
     )
 
     try:
-        # use fixed temperature=0 parameter
-        fixed_params = {"temperature": 0, "model": "gpt-4o"}
+        # use temperature=0 parameter, get model-specific default params and override temperature
+        fixed_params = model_client.get_default_params()
+        fixed_params["temperature"] = 0
         result = model_client.generate_completion(
             prompt, properties, fixed_params)
 
@@ -458,16 +459,16 @@ def agent_2_validate_stimulus(
         if stop_event and stop_event.is_set():
             print(
                 "Generation stopped by user after API call in agent_2_validate_stimulus.")
-            return {"Overall": "failed", "reason": "Stopped by user"}
+            return {"error": "Stopped by user"}
 
         if "error" in result:
             print(f"Agent 2 API error: {result}")
-            return {"Overall": "failed", "reason": f"Failed to validate stimulus: {result.get('error', 'Unknown error')}"}
+            return {"error": f"Failed to validate stimulus: {result.get('error', 'Unknown error')}"}
 
         return result
     except Exception as e:
         print(f"Error in agent_2_validate_stimulus: {e}")
-        return {"Overall": "failed", "reason": "Failed to validate stimulus"}
+        return {"error": "Failed to validate stimulus"}
 
 
 def agent_3_score_stimulus(
@@ -490,7 +491,9 @@ def agent_3_score_stimulus(
     )
 
     try:
-        fixed_params = {"temperature": 0, "model": "gpt-4o"}
+        # use temperature=0 parameter, get model-specific default params and override temperature
+        fixed_params = model_client.get_default_params()
+        fixed_params["temperature"] = 0
         result = model_client.generate_completion(
             prompt, properties, fixed_params)
 
@@ -683,7 +686,7 @@ def generate_stimuli(settings):
                     stop_event=stop_event
                 )
 
-                if isinstance(validation_result, dict) and validation_result.get('reason') == 'Stopped by user':
+                if isinstance(validation_result, dict) and validation_result.get('error') == 'Stopped by user':
                     if check_stop("Generation stopped after 'Validator'."):
                         return None, None
 
@@ -695,56 +698,34 @@ def generate_stimuli(settings):
                 if check_stop("Generation stopped after 'Validator'."):
                     return None, None
 
-                # Check if validation passed - Enhanced validation logic
-                # First check individual validation fields
-                validation_failed = False
-                failed_fields = []
+                # Check if there was an error first
+                if 'error' in validation_result:
+                    print(f"Validation error: {validation_result['error']}")
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", f"Validation error: {validation_result['error']}")
+                    continue  # Skip to next iteration
 
-                for key, value in validation_result.items():
-                    if key != 'Overall' and not value:
-                        validation_failed = True
-                        failed_fields.append(key)
-                        print(
-                            f"Validation failed for {key}: {value}, regenerating...")
-                        if websocket_callback:
-                            websocket_callback(
-                                "validator", f"Validation failed for {key}: {value}, regenerating...")
+                # Check validation fields
+                failed_fields = [
+                    key for key, value in validation_result.items() if not value]
 
-                # If any individual field failed, regenerate
-                if validation_failed:
+                if failed_fields:
+                    # Some fields failed validation
                     validation_fails += 1
-                    if ablation["use_agent_2"]:
-                        print(
-                            f"Failed validation for fields: {failed_fields}, regenerating...")
-                        if websocket_callback:
-                            websocket_callback(
-                                "validator", f"Failed validation for fields: {failed_fields}, regenerating...")
-                        continue
-                    else:
-                        print(
-                            "Ablation: Skipping Agent 2 (Individual Field Validation)")
-                        if websocket_callback:
-                            websocket_callback(
-                                "validator", "Ablation: Skipping Agent 2 (Individual Field Validation)")
-                        update_progress(iteration_num + 1)
-                        break
-
-                # Then check Overall field
-                if validation_result.get('Overall') == 'failed':
-                    validation_fails += 1
+                    print(
+                        f"Failed validation for fields: {failed_fields}, regenerating...")
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", f"Failed validation for fields: {failed_fields}, regenerating...")
 
                     if ablation["use_agent_2"]:
-                        print("Failed to validate (Overall), regenerating...")
-                        if websocket_callback:
-                            websocket_callback(
-                                "validator", "Failed to validate (Overall), regenerating...")
-                        continue
+                        continue  # Regenerate
                     else:
-                        print(
-                            "Ablation: Skipping Agent 2 (Overall Validation)")
+                        print("Ablation: Skipping Agent 2 (Validation)")
                         if websocket_callback:
                             websocket_callback(
-                                "validator", "Ablation: Skipping Agent 2 (Overall Validation)")
+                                "validator", "Ablation: Skipping Agent 2 (Validation)")
                         update_progress(iteration_num + 1)
                         break
                 else:
