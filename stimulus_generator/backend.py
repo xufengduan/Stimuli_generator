@@ -16,7 +16,6 @@ import queue
 openai.api_key = ""
 
 # Set Chutes AI API key (commented out)
-# CHUTES_API_KEY = "cpk_e73d5c0b2dac43eda7a2ff5f4f2ce7e3.f0d133ebd53754df89d851d4ac103b2a.3yhG3q88cAc2AAb430KPiUmhlFLCBfvh"
 
 # 使用multiprocessing实现真正的超时机制
 
