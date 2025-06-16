@@ -1934,6 +1934,7 @@ function callOpenAIAPI(prompt) {
     try {
         const apiKey = document.getElementById('api_key').value.trim();
 
+
         // Prepare request body
         const requestBody = {
             model: "gpt-4o",
@@ -1966,7 +1967,7 @@ function callOpenAIAPI(prompt) {
             .then(data => {
                 // Clear safety timeout when API call succeeds
                 clearSafetyTimeout();
-                
+
                 // Process API response
                 const content = data.choices[0].message.content;
                 // Wrap processing in try-catch
@@ -2036,7 +2037,7 @@ function callcustomAPI(prompt) {
         .then(data => {
             // Clear safety timeout when API call succeeds
             clearSafetyTimeout();
-            
+
             const content = data.choices[0].message.content;
             processAPIResponse(content);
         })

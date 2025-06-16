@@ -11,9 +11,10 @@ import threading
 import multiprocessing
 from multiprocessing import Process, Queue
 import queue
+import traceback
 
 # Set OpenAI API key
-openai.api_key = ""
+# openai.api_key = ""
 
 # Set Chutes AI API key (commented out)
 
@@ -21,23 +22,25 @@ openai.api_key = ""
 
 
 def _timeout_target(queue, func, args, kwargs):
-    """multiprocessing的目标函数，必须在模块级别定义才能被pickle"""
+    """multiprocessing target function, must be defined at module level to be pickled"""
     try:
         result = func(*args, **kwargs)
         queue.put(('success', result))
     except Exception as e:
-        queue.put(('error', str(e)))
+        tb = traceback.format_exc()
+        print(f"Exception in subprocess:\n{tb}")
+        queue.put(('error', f"{type(e).__name__}: {str(e)}\n{tb}"))
 
 
 def call_with_timeout(func, args, kwargs, timeout_seconds=60):
-    """使用multiprocessing实现API调用超时，可以强制终止"""
+    """use multiprocessing to implement API call timeout, can force terminate"""
     queue = Queue()
     process = Process(target=_timeout_target, args=(queue, func, args, kwargs))
     process.start()
     process.join(timeout_seconds)
 
     if process.is_alive():
-        # 强制终止进程
+        # force terminate process
         process.terminate()
         process.join()
         print(
@@ -123,11 +126,20 @@ class OpenAIClient(ModelClient):
     """OpenAI GPT model client"""
 
     def __init__(self, api_key=None):
+        self.api_key = api_key
         if api_key:
             openai.api_key = api_key
+            print(f"OpenAI API key set successfully, length: {len(api_key)}")
+        else:
+            print("Warning: No OpenAI API key provided!")
 
-    def _api_call(self, prompt, properties, params):
-        """API调用函数，会被multiprocessing调用"""
+    def _api_call(self, prompt, properties, params, api_key):
+        """API call function, will be called by multiprocessing"""
+        # set API key in subprocess
+        openai.api_key = api_key
+        print(
+            f"OpenAI API key in subprocess: {api_key[:10]}..." if api_key else "None")
+
         return openai.ChatCompletion.create(
             model=params["model"],
             messages=[{"role": "user", "content": prompt}],
@@ -150,17 +162,17 @@ class OpenAIClient(ModelClient):
         if params is None:
             params = self.get_default_params()
 
-        # 重试机制
+        # retry mechanism
         for attempt in range(3):
             try:
                 response = call_with_timeout(
-                    self._api_call, (prompt, properties, params), {}, 60)
+                    self._api_call, (prompt, properties, params, self.api_key), {}, 60)
 
                 if isinstance(response, dict) and "error" in response:
                     print(f"OpenAI API timeout attempt {attempt + 1}/3")
-                    if attempt == 2:  # 最后一次尝试
+                    if attempt == 2:  # last attempt
                         return {"error": "API timeout after 3 attempts"}
-                    time.sleep(2 ** attempt)  # 指数退避
+                    time.sleep(2 ** attempt)  # exponential backoff
                     continue
 
                 return json.loads(response['choices'][0]['message']['content'])
@@ -257,19 +269,19 @@ class CustomModelClient(ModelClient):
         self.model_name = model_name
 
     def _api_call(self, request_data, headers):
-        """API调用函数，会被multiprocessing调用"""
+        """API call function, will be called by multiprocessing"""
         response = requests.post(
             self.api_url,
             headers=headers,
             json=request_data,
-            timeout=60  # requests自己的超时
+            timeout=60  # timeout for requests
         )
         response.raise_for_status()
         return response.json()
 
     def generate_completion(self, prompt, properties, params=None):
 
-        # 构建基础请求
+        # build base request
         request_data = {
             "model": self.model_name,
             "messages": [{"role": "user", "content": prompt}],
@@ -296,7 +308,7 @@ class CustomModelClient(ModelClient):
             "Content-Type": "application/json"
         }
 
-        # 重试机制
+        # retry mechanism
         for attempt in range(3):
             try:
                 print("Sending request to Custom API with:",
@@ -340,6 +352,7 @@ def create_model_client(model_choice, settings=None):
     """Factory function to create appropriate model client"""
     if model_choice == 'GPT-4o':
         api_key = settings.get('api_key') if settings else None
+        print(f"OpenAI API key length: {len(api_key) if api_key else 0}")
         return OpenAIClient(api_key)
     elif model_choice == 'custom':
         if not settings:
@@ -434,10 +447,12 @@ def agent_2_validate_stimulus(
     )
 
     try:
-        # 使用固定的temperature=0参数
-        fixed_params = {"temperature": 0}
+        # use fixed temperature=0 parameter
+        fixed_params = {"temperature": 0, "model": "gpt-4o"}
         result = model_client.generate_completion(
             prompt, properties, fixed_params)
+
+        print("Agent 2 Output:", result)
 
         # Check stop event again
         if stop_event and stop_event.is_set():
@@ -446,7 +461,8 @@ def agent_2_validate_stimulus(
             return {"Overall": "failed", "reason": "Stopped by user"}
 
         if "error" in result:
-            return {"Overall": "failed", "reason": "Failed to validate stimulus"}
+            print(f"Agent 2 API error: {result}")
+            return {"Overall": "failed", "reason": f"Failed to validate stimulus: {result.get('error', 'Unknown error')}"}
 
         return result
     except Exception as e:
@@ -474,8 +490,7 @@ def agent_3_score_stimulus(
     )
 
     try:
-        # 使用固定的temperature=0参数
-        fixed_params = {"temperature": 0}
+        fixed_params = {"temperature": 0, "model": "gpt-4o"}
         result = model_client.generate_completion(
             prompt, properties, fixed_params)
 
@@ -484,6 +499,7 @@ def agent_3_score_stimulus(
             return {field: 0 for field in properties.keys()} if properties else {}
 
         if "error" in result:
+            print(f"Agent 3 API error: {result}")
             return {field: 0 for field in properties.keys()}
 
         return result
@@ -496,7 +512,7 @@ def agent_3_score_stimulus(
 # 6. Main Flow Function
 # ======================
 def generate_stimuli(settings):
-    openai.api_key = settings.get('api_key', "")
+
     stop_event = settings['stop_event']
     current_iteration = settings['current_iteration']
     total_iterations = settings['total_iterations']

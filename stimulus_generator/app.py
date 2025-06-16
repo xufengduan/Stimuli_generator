@@ -373,7 +373,7 @@ def generate_stimulus(session_id):
 
                 # Generate data
                 settings["ablation"] = {
-                    "use_agent_2": False,
+                    "use_agent_2": True,
                     "use_agent_3": True
                 }
                 df, filename = generate_stimuli(settings)
@@ -880,9 +880,6 @@ def cleanup_sessions():
         if not os.path.exists(session_file):
             cleanup_session(session_id)
             print(f"Cleaned up orphaned session {session_id} from memory.")
-
-
-
 
 
 # Add error handlers for Socket.IO
