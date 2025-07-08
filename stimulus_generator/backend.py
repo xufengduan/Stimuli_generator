@@ -284,9 +284,14 @@ class CustomModelClient(ModelClient):
         is_deepseek = self.api_url.strip().startswith("https://api.deepseek.com")
 
         if is_deepseek:
-            if not prompt.strip().endswith("请以严格的JSON格式返回。"):
-                prompt = prompt.rstrip() + \
-                    "\n请以严格的JSON格式返回。例如：{\"key1\": \"value1\", ...}"
+            # 生成字段列表
+            field_list = ', '.join([f'"{k}"' for k in properties.keys()])
+            # 生成示例JSON
+            example_json = '{' + ', '.join([f'\"{k}\": \"...\"' for k in properties.keys(
+            )]) + '}' if properties else '{"key1": "value1", ...}'
+            # 增加JSON输出要求
+            prompt = prompt.rstrip() + \
+                f"\n请以严格的JSON格式返回，字段包括：{field_list}，例如：{example_json}"
             request_data = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
