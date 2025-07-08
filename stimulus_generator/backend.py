@@ -281,24 +281,37 @@ class CustomModelClient(ModelClient):
 
     def generate_completion(self, prompt, properties, params=None):
 
-        # build base request
-        request_data = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "response_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": properties,
-                        "required": list(properties.keys()),
-                        "additionalProperties": False
+        is_deepseek = self.api_url.strip().startswith("https://api.deepseek.com")
+
+        if is_deepseek:
+            if not prompt.strip().endswith("请以严格的JSON格式返回。"):
+                prompt = prompt.rstrip() + \
+                    "\n请以严格的JSON格式返回。例如：{\"key1\": \"value1\", ...}"
+            request_data = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "response_format": {"type": "json_object"}
+            }
+        else:
+            # build base request
+            request_data = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "response_schema",
+                        "schema": {
+                            "type": "object",
+                            "properties": properties,
+                            "required": list(properties.keys()),
+                            "additionalProperties": False
+                        }
                     }
                 }
             }
-        }
 
         if params is not None:
             request_data.update(params)
