@@ -6,10 +6,8 @@ const progressBar = document.getElementById('progress_bar');
 const itemsContainer = document.getElementById('items-container');
 const agent2Table = document.getElementById("agent2PropertiesTable");
 const addAgent2Button = document.getElementById("add_agent_2_property_button");
-const deleteAgent2Button = document.getElementById("delete_agent_2_property_button");
 const agent3PropertiesTable = document.getElementById('agent3PropertiesTable');
 const addAgent3Button = document.getElementById('add_agent_3_property_button');
-const deleteAgent3Button = document.getElementById('delete_agent_3_property_button');
 const modelChoice = document.getElementById('model_choice');
 const apiKeyInput = document.getElementById('api_key');
 const generationStatus = document.getElementById('generation_status'); // Get generation status element
@@ -592,9 +590,7 @@ function initializePage() {
     generateButton.disabled = false;
     clearButton.disabled = false;
     addAgent2Button.disabled = false;
-    deleteAgent2Button.disabled = false;
     addAgent3Button.disabled = false;
-    deleteAgent3Button.disabled = false;
 
     // Determine API key input availability based on default model selection
     handleModelChange();
@@ -981,81 +977,8 @@ function collectItemsData() {
     return stimuli;
 }
 
-// Add Agent 2 Property
-addAgent2Button.addEventListener("click", function () {
-    const firstRowInputs = agent2Table.rows[1].getElementsByTagName('input'); // Get first row input boxes
-    const newRow = agent2Table.insertRow(-1);
-    const cell1 = newRow.insertCell(0);
-    const cell2 = newRow.insertCell(1);
 
-    const newInput1 = document.createElement("input");
-    newInput1.type = "text";
-    newInput1.placeholder = "Enter new property";
-    newInput1.style.width = getComputedStyle(firstRowInputs[0]).width; // Make width same as first row's first column
-
-    const newInput2 = document.createElement("input");
-    newInput2.type = "text";
-    newInput2.placeholder = "Enter property's description";
-    newInput2.style.width = getComputedStyle(firstRowInputs[1]).width; // Make width same as first row's second column
-
-    cell1.appendChild(newInput1);
-    cell2.appendChild(newInput2);
-});
-
-// Delete Agent 2 Property
-deleteAgent2Button.addEventListener("click", function () {
-    const rowCount = agent2Table.rows.length;
-    if (rowCount > 2) {
-        agent2Table.deleteRow(rowCount - 1);
-    }
-});
-
-// Listen to the 'Add Agent 3 Property' button
-addAgent3Button.addEventListener('click', () => {
-    const newRow = agent3PropertiesTable.insertRow(-1);
-
-    // Add four columns
-    // Property name column
-    const cell1 = newRow.insertCell(0);
-    cell1.className = "agent_3_properties-column";
-    const input1 = document.createElement('input');
-    input1.type = 'text';
-    input1.placeholder = "Enter new aspect";
-    cell1.appendChild(input1);
-
-    // Description column
-    const cell2 = newRow.insertCell(1);
-    cell2.className = "agent_3_description-column";
-    const input2 = document.createElement('input');
-    input2.type = 'text';
-    input2.placeholder = "Enter aspect's description";
-    cell2.appendChild(input2);
-
-    // Minimum value column
-    const cell3 = newRow.insertCell(2);
-    cell3.className = "agent_3_minimum-column";
-    const input3 = document.createElement('input');
-    input3.type = 'number';
-    input3.min = '0';
-    input3.placeholder = "e.g. 0";
-    cell3.appendChild(input3);
-
-    // Maximum value column
-    const cell4 = newRow.insertCell(3);
-    cell4.className = "agent_3_maximum-column";
-    const input4 = document.createElement('input');
-    input4.type = 'number';
-    input4.min = '0';
-    input4.placeholder = "e.g. 10";
-    cell4.appendChild(input4);
-});
-
-// Listen to the 'Delete Agent 3 Property' button
-deleteAgent3Button.addEventListener('click', () => {
-    if (agent3PropertiesTable.rows.length > 2) { // Ensure at least one row is kept
-        agent3PropertiesTable.deleteRow(-1); // Delete the last row
-    }
-});
+// This event listener was removed since we now have individual delete buttons for each row
 
 // Show generating status text
 function showGeneratingStatus() {
@@ -1155,9 +1078,7 @@ function resetUI() {
 
     // Enable all table-related buttons
     addAgent2Button.disabled = false;
-    deleteAgent2Button.disabled = false;
     addAgent3Button.disabled = false;
-    deleteAgent3Button.disabled = false;
 
     // Enable Add/Delete buttons in all tables
     document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
@@ -1347,9 +1268,7 @@ function startGeneration() {
 
     // Disable all table-related buttons
     addAgent2Button.disabled = true;
-    deleteAgent2Button.disabled = true;
     addAgent3Button.disabled = true;
-    deleteAgent3Button.disabled = true;
 
     // Disable Add/Delete buttons in all tables
     document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
@@ -2182,9 +2101,15 @@ function fillValidatorTable(requirements) {
             descriptionInput.placeholder = "Enter property's description";
             descriptionCell.appendChild(descriptionInput);
 
-            // Add cells to row
+            // 新增：添加Delete按钮
+            const actionCell = document.createElement('td');
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-row-btn delete-btn';
+            deleteBtn.textContent = 'Delete';
+            actionCell.appendChild(deleteBtn);
             newRow.appendChild(propertyCell);
             newRow.appendChild(descriptionCell);
+            newRow.appendChild(actionCell);
 
             // Add row to table
             tbody.appendChild(newRow);
@@ -2270,11 +2195,17 @@ function fillScorerTable(scoringDimensions) {
             maxInput.placeholder = "e.g. 10";
             maxCell.appendChild(maxInput);
 
-            // Add cells to row
+            // 新增：添加Delete按钮
+            const actionCell = document.createElement('td');
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-row-btn delete-btn';
+            deleteBtn.textContent = 'Delete';
+            actionCell.appendChild(deleteBtn);
             newRow.appendChild(aspectCell);
             newRow.appendChild(descriptionCell);
             newRow.appendChild(minCell);
             newRow.appendChild(maxCell);
+            newRow.appendChild(actionCell);
 
             // Add row to table
             tbody.appendChild(newRow);
@@ -2359,9 +2290,7 @@ function disableUI() {
     generateButton.disabled = true;
     clearButton.disabled = true;
     addAgent2Button.disabled = true;
-    deleteAgent2Button.disabled = true;
     addAgent3Button.disabled = true;
-    deleteAgent3Button.disabled = true;
     modelSelect.disabled = true;
     apiKeyInput.disabled = true;
 
@@ -2400,9 +2329,7 @@ function enableUI() {
     generateButton.disabled = false;
     clearButton.disabled = false;
     addAgent2Button.disabled = false;
-    deleteAgent2Button.disabled = false;
     addAgent3Button.disabled = false;
-    deleteAgent3Button.disabled = false;
     modelSelect.disabled = false;
 
     // Determine if API key input box is available based on current model selection
@@ -2455,3 +2382,49 @@ function createPageOverlay(message) {
     document.body.appendChild(overlay);
     return overlay;
 }
+
+// Add event delegation for row deletion in Validator table
+agent2Table.addEventListener('click', function (e) {
+    if (e.target && e.target.classList.contains('delete-row-btn')) {
+        const row = e.target.closest('tr');
+        if (row.parentNode.rows.length > 1) {
+            row.remove();
+        }
+    }
+});
+
+// Add event delegation for row deletion in Scorer table
+agent3PropertiesTable.addEventListener('click', function (e) {
+    if (e.target && e.target.classList.contains('delete-row-btn')) {
+        const row = e.target.closest('tr');
+        if (row.parentNode.rows.length > 1) {
+            row.remove();
+        }
+    }
+});
+
+// Modify addAgent2Button click handler to add Delete button in new row
+addAgent2Button.addEventListener('click', function () {
+    const tbody = agent2Table.querySelector('tbody');
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+    <td class="agent_2_properties-column"><input type="text" placeholder="e.g. Synonym"></td>
+    <td class="agent_2_description-column"><input type="text" placeholder="e.g. Whether the words in the word pair are synonyms."></td>
+    <td><button class="delete-row-btn">Delete</button></td>
+  `;
+    tbody.appendChild(newRow);
+});
+
+// Modify addAgent3Button click handler to add Delete button in new row
+addAgent3Button.addEventListener('click', function () {
+    const tbody = agent3PropertiesTable.querySelector('tbody');
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+    <td class="agent_3_properties-column"><input type="text" placeholder="e.g. Word Pair Frequency"></td>
+    <td class="agent_3_description-column"><input type="text" placeholder="e.g. How frequent the word pair are used in English"></td>
+    <td class="agent_3_minimum-column"><input type="number" min="0" placeholder="e.g. 0"></td>
+    <td class="agent_3_maximum-column"><input type="number" min="0" placeholder="e.g. 10"></td>
+    <td><button class="delete-row-btn">Delete</button></td>
+  `;
+    tbody.appendChild(newRow);
+});
