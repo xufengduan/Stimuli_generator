@@ -284,17 +284,28 @@ class CustomModelClient(ModelClient):
         is_deepseek = self.api_url.strip().startswith("https://api.deepseek.com")
 
         if is_deepseek:
+            import time
+            rand_stamp = int(time.time())
             # 生成字段列表
             field_list = ', '.join([f'"{k}"' for k in properties.keys()])
-            # 生成示例JSON
-            example_json = '{' + ', '.join([f'\"{k}\": \"...\"' for k in properties.keys(
-            )]) + '}' if properties else '{"key1": "value1", ...}'
-            # 增加JSON输出要求
-            prompt = prompt.rstrip() + \
-                f"\n请以严格的JSON格式返回，字段包括：{field_list}，例如：{example_json}"
+            # 判断agent的类型
+            # 如果以"Please verify the following NEW STIMULUS " 开头，则在prompt最后返回，每个字段只能返回布尔值
+            if prompt.strip().startswith("Please verify the following NEW STIMULUS"):
+                prompt = prompt.rstrip() + \
+                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}，每个字段只能返回布尔值（True/False）"
+            elif prompt.strip().startswith("Please rate the following STIMULUS"):
+                prompt = prompt.rstrip() + \
+                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}，每个字段只能返回数字"
+            else:
+                prompt = prompt.rstrip() + \
+                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}"
+
             request_data = {
                 "model": self.model_name,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [
+                    {"role": "system", "content": f"RAND:{rand_stamp}"},
+                    {"role": "user", "content": prompt}
+                ],
                 "stream": False,
                 "response_format": {"type": "json_object"}
             }
@@ -723,7 +734,7 @@ def generate_stimuli(settings):
                         websocket_callback(
                             "validator", f"Validation error: {validation_result['error']}")
                     continue  # Skip to next iteration
-
+                
                 # Check validation fields
                 failed_fields = [
                     key for key, value in validation_result.items() if not value]
