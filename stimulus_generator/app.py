@@ -47,6 +47,95 @@ sessions_lock = Lock()
 def get_session_file(session_id):
     return os.path.join(SESSION_DIR, f"{session_id}.pkl")
 
+
+def format_stimulus_content(stimulus_content):
+    """
+    格式化stimulus_content，将字典格式转换为可读的字符串格式
+    从: {'key1': 'value1', 'key2': 'value2'}
+    转换为: 
+    Key 1: key1
+    Content: value1
+    Key 2: key2
+    Content: value2
+    """
+    if not isinstance(stimulus_content, dict):
+        # 如果不是字典，尝试解析字符串
+        try:
+            if isinstance(stimulus_content, str):
+                # 尝试解析JSON字符串
+                stimulus_dict = json.loads(stimulus_content)
+            else:
+                return str(stimulus_content)
+        except (json.JSONDecodeError, TypeError):
+            return str(stimulus_content)
+    else:
+        stimulus_dict = stimulus_content
+
+    formatted_lines = []
+    for i, (key, value) in enumerate(stimulus_dict.items(), 1):
+        formatted_lines.append(f"Key {i}: {key}")
+        formatted_lines.append(f"Content: {value}")
+        if i < len(stimulus_dict):  # 不在最后一项后添加空行
+            formatted_lines.append("")
+
+    return "\n".join(formatted_lines)
+
+
+def expand_stimulus_content_to_columns(df):
+    """
+    将stimulus_content列展开为多个Key和Content列
+    """
+    if 'stimulus_content' not in df.columns:
+        return df
+
+    # 创建新的dataframe副本
+    df_expanded = df.copy()
+
+    # 收集所有需要的列
+    max_items = 0
+    expanded_data = []
+
+    for idx, row in df_expanded.iterrows():
+        stimulus_content = row['stimulus_content']
+
+        # 解析stimulus_content
+        if not isinstance(stimulus_content, dict):
+            try:
+                if isinstance(stimulus_content, str):
+                    stimulus_dict = json.loads(stimulus_content)
+                else:
+                    stimulus_dict = {}
+            except (json.JSONDecodeError, TypeError):
+                stimulus_dict = {}
+        else:
+            stimulus_dict = stimulus_content
+
+        # 记录最大项目数
+        max_items = max(max_items, len(stimulus_dict))
+
+        # 为这一行创建展开的数据
+        row_data = {}
+        for i, (key, value) in enumerate(stimulus_dict.items(), 1):
+            row_data[f'Key{i}'] = key
+            row_data[f'Content{i}'] = value
+
+        expanded_data.append(row_data)
+
+    # 创建所有新列
+    for i in range(1, max_items + 1):
+        df_expanded[f'Key{i}'] = ''
+        df_expanded[f'Content{i}'] = ''
+
+    # 填充数据
+    for idx, row_data in enumerate(expanded_data):
+        for col, value in row_data.items():
+            df_expanded.at[idx, col] = value
+
+    # 删除原始的stimulus_content列
+    df_expanded = df_expanded.drop(columns=['stimulus_content'])
+
+    return df_expanded
+
 # Save the session state to a file
 
 
@@ -653,6 +742,9 @@ def download_file(session_id, filename):
         for col in metadata_columns:
             if col in df_to_download.columns:
                 df_to_download = df_to_download.drop(columns=[col])
+
+        # Expand stimulus_content column if it exists
+        df_to_download = expand_stimulus_content_to_columns(df_to_download)
 
         # Store timestamp in variable for logging but don't add to dataframe
         current_timestamp = int(time.time())
