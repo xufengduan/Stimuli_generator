@@ -18,7 +18,7 @@ import traceback
 
 # Set Chutes AI API key (commented out)
 
-# 使用multiprocessing实现真正的超时机制
+# Use multiprocessing to implement real timeout mechanism
 
 
 def _timeout_target(queue, func, args, kwargs):
@@ -89,7 +89,10 @@ Please rate the following STIMULUS based on the Experimental stimuli design prov
 STIMULUS: {valid_stimulus}
 Experimental stimuli design: {experiment_design}
 
-Please return in JSON format including the score for each dimension.
+SCORING REQUIREMENTS:
+{scoring_requirements}
+
+Please return in JSON format including the score for each dimension within the specified ranges.
 """
 
 # ---- Agent 1 Stimulus Schema ----
@@ -196,7 +199,7 @@ class OpenAIClient(ModelClient):
 #         self.api_key = api_key
 
 #     def _api_call(self, messages, response_format, params):
-#         """API调用函数，会被multiprocessing调用"""
+#         """API call function that will be called by multiprocessing"""
 #         client = InferenceClient(
 #             params["model"],
 #             token=self.api_key,
@@ -230,7 +233,7 @@ class OpenAIClient(ModelClient):
 
 #         messages = [{"role": "user", "content": prompt}]
 
-#         # 重试机制
+#         # Retry mechanism
 #         for attempt in range(3):
 #             try:
 #                 response = call_with_timeout(
@@ -286,19 +289,19 @@ class CustomModelClient(ModelClient):
         if is_deepseek:
             import time
             rand_stamp = int(time.time())
-            # 生成字段列表
+            # Generate field list
             field_list = ', '.join([f'"{k}"' for k in properties.keys()])
-            # 判断agent的类型
-            # 如果以"Please verify the following NEW STIMULUS " 开头，则在prompt最后返回，每个字段只能返回布尔值
+            # Determine agent type
+            # If starts with "Please verify the following NEW STIMULUS ", then return at the end of prompt, each field can only return boolean value
             if prompt.strip().startswith("Please verify the following NEW STIMULUS"):
                 prompt = prompt.rstrip() + \
-                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}，每个字段只能返回布尔值（True/False）"
+                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}, each field can only return boolean values (True/False)"
             elif prompt.strip().startswith("Please rate the following STIMULUS"):
                 prompt = prompt.rstrip() + \
-                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}，每个字段只能返回数字"
+                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}, each field can only return numbers"
             else:
                 prompt = prompt.rstrip() + \
-                    f"\n请以严格的JSON格式返回，字段必须包括：{field_list}，每个字段的要求如下：{properties}"
+                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}"
 
             request_data = {
                 "model": self.model_name,
@@ -500,6 +503,141 @@ def agent_2_validate_stimulus(
         return {"error": "Failed to validate stimulus"}
 
 
+def agent_2_validate_stimulus_individual(
+        model_client,
+        new_stimulus,
+        experiment_design,
+        properties,
+        prompt_template=AGENT_2_PROMPT_TEMPLATE,
+        stop_event=None,
+        websocket_callback=None):
+    """
+    Agent 2: Validate experimental stimulus by checking each criterion individually
+    """
+    if stop_event and stop_event.is_set():
+        print("Generation stopped by user in agent_2_validate_stimulus_individual.")
+        return {"error": "Stopped by user"}
+
+    validation_results = {}
+
+    # Create individual prompt template for each criterion
+    individual_prompt_template = """\
+Please verify the following NEW STIMULUS with utmost precision for the specific criterion mentioned below.
+
+NEW STIMULUS: {new_stimulus}
+
+Experimental stimuli design: {experiment_design}
+
+SPECIFIC CRITERION TO VALIDATE:
+Property: {property_name}
+Description: {property_description}
+
+Please return in JSON format with only one field: "{property_name}" (boolean: true if criterion is met, false otherwise).
+"""
+
+    try:
+        total_criteria = len(properties)
+        current_criterion = 0
+
+        for property_name, property_description in properties.items():
+            current_criterion += 1
+
+            if stop_event and stop_event.is_set():
+                print(
+                    f"Generation stopped by user while validating {property_name}.")
+                return {"error": "Stopped by user"}
+
+            if websocket_callback:
+                websocket_callback(
+                    "validator", f"Validating criterion {current_criterion}/{total_criteria}: {property_name}")
+
+            # Create prompt for individual criterion
+            prompt = individual_prompt_template.format(
+                new_stimulus=new_stimulus,
+                experiment_design=experiment_design,
+                property_name=property_name,
+                property_description=property_description
+            )
+
+            # Create properties dict with single criterion
+            single_property = {property_name: property_description}
+
+            # Get model-specific default params and override temperature
+            fixed_params = model_client.get_default_params()
+            fixed_params["temperature"] = 0
+
+            result = model_client.generate_completion(
+                prompt, single_property, fixed_params)
+
+            print(f"Agent 2 Individual Validation - {property_name}: {result}")
+
+            if "error" in result:
+                print(
+                    f"Agent 2 Individual API error for {property_name}: {result}")
+                if websocket_callback:
+                    websocket_callback(
+                        "validator", f"Error validating criterion {property_name}: {result.get('error', 'Unknown error')}")
+                return {"error": f"Failed to validate criterion {property_name}: {result.get('error', 'Unknown error')}"}
+
+            # Extract the validation result for this criterion
+            if property_name in result:
+                validation_results[property_name] = result[property_name]
+                status = "PASSED" if result[property_name] else "FAILED"
+                if websocket_callback:
+                    websocket_callback(
+                        "validator", f"Criterion {property_name}: {status}")
+
+                # Early stop: if any criterion fails, immediately reject
+                if not result[property_name]:
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", f"Early rejection: Criterion {property_name} failed. Stopping validation.")
+                    print(
+                        f"Agent 2 Individual Validation - Early stop: {property_name} failed")
+                    return validation_results
+            else:
+                print(
+                    f"Warning: {property_name} not found in result, assuming False")
+                validation_results[property_name] = False
+                if websocket_callback:
+                    websocket_callback(
+                        "validator", f"Criterion {property_name}: FAILED (parsing error)")
+                    websocket_callback(
+                        "validator", f"Early rejection: Criterion {property_name} failed. Stopping validation.")
+                print(
+                    f"Agent 2 Individual Validation - Early stop: {property_name} failed (parsing error)")
+                return validation_results
+
+        print("Agent 2 Individual Validation - All Results:", validation_results)
+        if websocket_callback:
+            websocket_callback(
+                "validator", "All criteria passed successfully!")
+        return validation_results
+
+    except Exception as e:
+        print(f"Error in agent_2_validate_stimulus_individual: {e}")
+        return {"error": "Failed to validate stimulus individually"}
+
+
+def generate_scoring_requirements(properties):
+    """
+    Generate scoring requirements text from properties dictionary
+    """
+    if not properties:
+        return "No specific scoring requirements provided."
+
+    requirements = []
+    for aspect_name, aspect_details in properties.items():
+        min_score = aspect_details.get('minimum', 0)
+        max_score = aspect_details.get('maximum', 10)
+        description = aspect_details.get('description', aspect_name)
+
+        requirements.append(
+            f"- {aspect_name}: {description} (Score range: {min_score} to {max_score})")
+
+    return "\n".join(requirements)
+
+
 def agent_3_score_stimulus(
         model_client,
         valid_stimulus,
@@ -514,9 +652,13 @@ def agent_3_score_stimulus(
         print("Generation stopped by user after API call in agent_3_score_stimulus.")
         return {field: 0 for field in properties.keys()} if properties else {}
 
+    # Generate scoring requirements text
+    scoring_requirements = generate_scoring_requirements(properties)
+
     prompt = prompt_template.format(
         experiment_design=experiment_design,
-        valid_stimulus=valid_stimulus
+        valid_stimulus=valid_stimulus,
+        scoring_requirements=scoring_requirements
     )
 
     try:
@@ -537,6 +679,134 @@ def agent_3_score_stimulus(
         return result
     except Exception as e:
         print(f"Error in agent_3_score_stimulus: {e}")
+        return {field: 0 for field in properties.keys()}
+
+
+def agent_3_score_stimulus_individual(
+        model_client,
+        valid_stimulus,
+        experiment_design,
+        properties,
+        prompt_template=AGENT_3_PROMPT_TEMPLATE,
+        stop_event=None,
+        websocket_callback=None):
+    """
+    Agent 3: Score experimental stimulus by evaluating each aspect individually
+    """
+    if stop_event and stop_event.is_set():
+        print("Generation stopped by user in agent_3_score_stimulus_individual.")
+        return {field: 0 for field in properties.keys()} if properties else {}
+
+    scoring_results = {}
+
+    # Create individual prompt template for each aspect
+    individual_prompt_template = """\
+Please rate the following STIMULUS based on the specific aspect mentioned below for a psychological experiment:
+
+STIMULUS: {valid_stimulus}
+Experimental stimuli design: {experiment_design}
+
+SPECIFIC ASPECT TO SCORE:
+- Aspect Name: {aspect_name}
+- Description: {aspect_description}
+- Minimum Score: {min_score}
+- Maximum Score: {max_score}
+- Score Range: You must provide an integer score between {min_score} and {max_score} (inclusive)
+
+SCORING INSTRUCTIONS:
+Rate this stimulus on the "{aspect_name}" dimension based on the provided description. Your score should reflect how well the stimulus meets this criterion, with {min_score} being the lowest possible score and {max_score} being the highest possible score.
+
+Please return in JSON format with only one field: "{aspect_name}" (integer score within the specified range {min_score}-{max_score}).
+"""
+
+    try:
+        total_aspects = len(properties)
+        current_aspect = 0
+
+        for aspect_name, aspect_details in properties.items():
+            current_aspect += 1
+
+            if stop_event and stop_event.is_set():
+                print(
+                    f"Generation stopped by user while scoring {aspect_name}.")
+                return {field: 0 for field in properties.keys()}
+
+            if websocket_callback:
+                websocket_callback(
+                    "scorer", f"Evaluating aspect {current_aspect}/{total_aspects}: {aspect_name}")
+
+            # Extract min and max scores from aspect details
+            min_score = aspect_details.get('minimum', 0)
+            max_score = aspect_details.get('maximum', 10)
+            description = aspect_details.get('description', aspect_name)
+
+            # Create prompt for individual aspect
+            prompt = individual_prompt_template.format(
+                valid_stimulus=valid_stimulus,
+                experiment_design=experiment_design,
+                aspect_name=aspect_name,
+                aspect_description=description,
+                min_score=min_score,
+                max_score=max_score
+            )
+
+            # Create properties dict with single aspect
+            single_aspect = {aspect_name: description}
+
+            # Get model-specific default params and override temperature
+            fixed_params = model_client.get_default_params()
+            fixed_params["temperature"] = 0
+
+            result = model_client.generate_completion(
+                prompt, single_aspect, fixed_params)
+
+            print(f"Agent 3 Individual Scoring - {aspect_name}: {result}")
+
+            if "error" in result:
+                print(
+                    f"Agent 3 Individual API error for {aspect_name}: {result}")
+                if websocket_callback:
+                    websocket_callback(
+                        "scorer", f"Error scoring aspect {aspect_name}: {result.get('error', 'Unknown error')}")
+                scoring_results[aspect_name] = 0
+                continue
+
+            # Extract the scoring result for this aspect
+            if aspect_name in result:
+                score = result[aspect_name]
+                # Ensure score is within valid range
+                if isinstance(score, (int, float)):
+                    score = max(min_score, min(max_score, int(score)))
+                    scoring_results[aspect_name] = score
+                    if websocket_callback:
+                        websocket_callback(
+                            "scorer", f"Aspect {aspect_name}: {score}/{max_score}")
+                else:
+                    print(
+                        f"Warning: Invalid score for {aspect_name}, assuming 0")
+                    scoring_results[aspect_name] = 0
+                    if websocket_callback:
+                        websocket_callback(
+                            "scorer", f"Aspect {aspect_name}: 0/{max_score} (invalid response)")
+            else:
+                print(
+                    f"Warning: {aspect_name} not found in result, assuming 0")
+                scoring_results[aspect_name] = 0
+                if websocket_callback:
+                    websocket_callback(
+                        "scorer", f"Aspect {aspect_name}: 0/{max_score} (parsing error)")
+
+        print("Agent 3 Individual Scoring - All Results:", scoring_results)
+        if websocket_callback:
+            total_score = sum(scoring_results.values())
+            max_possible = sum(aspect_details.get('maximum', 10)
+                               for aspect_details in properties.values())
+            websocket_callback(
+                "scorer", f"Individual scoring completed! Total: {total_score}/{max_possible}")
+        return scoring_results
+
+    except Exception as e:
+        print(f"Error in agent_3_score_stimulus_individual: {e}")
         return {field: 0 for field in properties.keys()}
 
 
@@ -706,14 +976,34 @@ def generate_stimuli(settings):
                     return None, None
 
                 # Step 2: Validate stimulus
-                validation_result = agent_2_validate_stimulus(
-                    model_client=model_client,
-                    new_stimulus=stimuli,
-                    experiment_design=experiment_design,
-                    properties=agent_2_properties,
-                    prompt_template=AGENT_2_PROMPT_TEMPLATE,
-                    stop_event=stop_event
-                )
+                # Check if individual validation is enabled
+                individual_validation = settings.get(
+                    'agent_2_individual_validation', False)
+
+                if individual_validation:
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", f"Using individual validation mode - checking {len(agent_2_properties)} criteria...")
+                    validation_result = agent_2_validate_stimulus_individual(
+                        model_client=model_client,
+                        new_stimulus=stimuli,
+                        experiment_design=experiment_design,
+                        properties=agent_2_properties,
+                        stop_event=stop_event,
+                        websocket_callback=websocket_callback
+                    )
+                else:
+                    if websocket_callback:
+                        websocket_callback(
+                            "validator", "Using batch validation mode...")
+                    validation_result = agent_2_validate_stimulus(
+                        model_client=model_client,
+                        new_stimulus=stimuli,
+                        experiment_design=experiment_design,
+                        properties=agent_2_properties,
+                        prompt_template=AGENT_2_PROMPT_TEMPLATE,
+                        stop_event=stop_event
+                    )
 
                 if isinstance(validation_result, dict) and validation_result.get('error') == 'Stopped by user':
                     if check_stop("Generation stopped after 'Validator'."):
@@ -734,7 +1024,7 @@ def generate_stimuli(settings):
                         websocket_callback(
                             "validator", f"Validation error: {validation_result['error']}")
                     continue  # Skip to next iteration
-                
+
                 # Check validation fields
                 failed_fields = [
                     key for key, value in validation_result.items() if not value]
@@ -804,14 +1094,34 @@ def generate_stimuli(settings):
 
             # Step 3: Score
             if ablation["use_agent_3"]:
-                scores = agent_3_score_stimulus(
-                    model_client=model_client,
-                    valid_stimulus=stimuli,
-                    experiment_design=experiment_design,
-                    properties=agent_3_properties,
-                    prompt_template=AGENT_3_PROMPT_TEMPLATE,
-                    stop_event=stop_event
-                )
+                # Check if individual scoring is enabled
+                individual_scoring = settings.get(
+                    'agent_3_individual_scoring', False)
+
+                if individual_scoring:
+                    if websocket_callback:
+                        websocket_callback(
+                            "scorer", f"Using individual scoring mode - evaluating {len(agent_3_properties)} aspects...")
+                    scores = agent_3_score_stimulus_individual(
+                        model_client=model_client,
+                        valid_stimulus=stimuli,
+                        experiment_design=experiment_design,
+                        properties=agent_3_properties,
+                        stop_event=stop_event,
+                        websocket_callback=websocket_callback
+                    )
+                else:
+                    if websocket_callback:
+                        websocket_callback(
+                            "scorer", "Using batch scoring mode...")
+                    scores = agent_3_score_stimulus(
+                        model_client=model_client,
+                        valid_stimulus=stimuli,
+                        experiment_design=experiment_design,
+                        properties=agent_3_properties,
+                        prompt_template=AGENT_3_PROMPT_TEMPLATE,
+                        stop_event=stop_event
+                    )
 
                 if isinstance(scores, dict) and all(v == 0 for v in scores.values()):
                     if stop_event.is_set():
@@ -941,7 +1251,7 @@ def generate_stimuli(settings):
 
 
 # ======================
-# 7. Legacy Support Function (保持向后兼容)
+# 7. Legacy Support Function (maintain backward compatibility)
 # ======================
 def custom_model_inference_handler(session_id, prompt, model, api_url, api_key, params=None):
     """Legacy function for backward compatibility"""

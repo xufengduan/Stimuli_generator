@@ -490,16 +490,45 @@ function handleLogMessage(type, message) {
     }
 }
 
+// Clear log function
+function clearLog(logId) {
+    const logElement = document.getElementById(logId);
+    if (logElement) {
+        logElement.innerHTML = '';
+    }
+}
+
 // Add log message to panel
 function appendLogMessage(logElement, message, className = '') {
     // Create message container
     const logMessage = document.createElement('div');
-    logMessage.className = `log-message ${className}`;
 
-    // Format message
+    // Determine message type based on content and className
+    let messageType = className || 'info';
+    if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
+        messageType = 'error';
+    } else if (message.toLowerCase().includes('passed') || message.toLowerCase().includes('completed') || message.toLowerCase().includes('success')) {
+        messageType = 'success';
+    } else if (message.toLowerCase().includes('warning') || message.toLowerCase().includes('early rejection') || message.toLowerCase().includes('regenerating')) {
+        messageType = 'warning';
+    }
+
+    logMessage.className = `log-message ${messageType}`;
+
+    // Add timestamp
+    const timestamp = new Date().toLocaleTimeString();
+    const timestampElement = document.createElement('div');
+    timestampElement.className = 'log-timestamp';
+    timestampElement.textContent = timestamp;
+
+    // Create text container
+    const textElement = document.createElement('div');
+    textElement.className = 'log-text';
+
+    // Format message content
     if (message.includes('=== No.')) {
         // Use special style for round information
-        logMessage.innerHTML = `<span class="message-round">${message}</span>`;
+        textElement.innerHTML = `<span class="message-round">${message}</span>`;
     } else if (message.includes('Output:')) {
         // Agent output, try to format JSON
         try {
@@ -510,23 +539,21 @@ function appendLogMessage(logElement, message, className = '') {
             // Try to format JSON
             if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
                 const formattedJson = formatJson(jsonText);
-                logMessage.innerHTML = `<span class="message-output">${prefix}Output:</span><br>${formattedJson}`;
+                textElement.innerHTML = `<span class="message-output">${prefix}Output:</span><br>${formattedJson}`;
             } else {
-                logMessage.innerHTML = `<span class="message-output">${message}</span>`;
+                textElement.innerHTML = `<span class="message-output">${message}</span>`;
             }
         } catch (e) {
-            logMessage.innerHTML = `<span class="message-output">${message}</span>`;
+            textElement.innerHTML = `<span class="message-output">${message}</span>`;
         }
-    } else if (message.includes('regenerating')) {
-        // Use warning style for warning messages
-        logMessage.innerHTML = `<span class="message-warning">${message}</span>`;
-    } else if (className === 'error') {
-        // Use error style for error messages
-        logMessage.innerHTML = `<span class="message-error">${message}</span>`;
     } else {
         // General message
-        logMessage.innerHTML = `<span class="message-output">${message}</span>`;
+        textElement.innerHTML = `<span class="message-output">${message}</span>`;
     }
+
+    // Append timestamp and text to message container
+    logMessage.appendChild(timestampElement);
+    logMessage.appendChild(textElement);
 
     // Add to log panel
     logElement.appendChild(logMessage);
@@ -669,13 +696,13 @@ function validateAutoGenerateInputs() {
 
     // If custom model is selected, check API Key, URL, and model name
     if (selectedModel === 'custom') {
-        const apiUrl = document.getElementById('custom_api_url').value.trim();  // 修正字段ID
-        const modelName = document.getElementById('custom_model_name').value.trim();  // 添加模型名称验证
+        const apiUrl = document.getElementById('custom_api_url').value.trim();  // Fixed field ID
+        const modelName = document.getElementById('custom_model_name').value.trim();  // Add model name validation
         if (!apiKey) {
             alert('API Key cannot be empty when using custom model!');
             return false;
         }
-        if (!modelName) {  // 添加模型名称验证
+        if (!modelName) {  // Add model name validation
             alert('Model Name cannot be empty when using custom model!');
             return false;
         }
@@ -1131,13 +1158,13 @@ function validateInputs() {
 
     // If custom model is selected, check API Key and URL
     if (selectedModel === 'custom') {
-        const apiUrl = document.getElementById('custom_api_url').value.trim();  // 修正字段ID
-        const modelName = document.getElementById('custom_model_name').value.trim();  // 添加模型名称验证
+        const apiUrl = document.getElementById('custom_api_url').value.trim();  // Fixed field ID
+        const modelName = document.getElementById('custom_model_name').value.trim();  // Add model name validation
         if (!apiKey) {
             alert('API Key cannot be empty when using custom model!');
             return false;
         }
-        if (!modelName) {  // 添加模型名称验证
+        if (!modelName) {  // Add model name validation
             alert('Model Name cannot be empty when using custom model!');
             return false;
         }
@@ -1354,13 +1381,15 @@ function startGeneration() {
         modelChoice: document.getElementById('model_choice').value,
         experimentDesign: document.getElementById('experiment_design').value,
         previousStimuli: previousStimuli,
-        iteration: parseInt(document.getElementById('iteration').value)
+        iteration: parseInt(document.getElementById('iteration').value),
+        agent2IndividualValidation: document.getElementById('agent2_individual_validation').checked,
+        agent3IndividualScoring: document.getElementById('agent3_individual_scoring').checked
     };
 
     // Add custom model parameters if custom model is selected
     if (settings.modelChoice === 'custom') {
         settings.apiUrl = document.getElementById('custom_api_url').value.trim();
-        settings.modelName = document.getElementById('custom_model_name').value.trim();  // 修正字段ID
+        settings.modelName = document.getElementById('custom_model_name').value.trim();  // Fixed field ID
         const customParams = document.getElementById('custom_params').value.trim();
         if (customParams) {
             try {
@@ -1390,7 +1419,7 @@ function startGeneration() {
     // Function to handle fetch requests
     function attemptFetch() {
         fetchRetryCount++;
-        console.log(`Fetch尝试 ${fetchRetryCount}/${maxFetchRetries + 1}...`);
+        console.log(`Fetch attempt ${fetchRetryCount}/${maxFetchRetries + 1}...`);
 
         fetchWithTimeout(getApiUrl('generate_stimulus'), {
             method: 'POST',
@@ -2101,7 +2130,7 @@ function fillValidatorTable(requirements) {
             descriptionInput.placeholder = "Enter property's description";
             descriptionCell.appendChild(descriptionInput);
 
-            // 新增：添加Delete按钮
+            // New: Add Delete button
             const actionCell = document.createElement('td');
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-row-btn delete-btn';
@@ -2195,7 +2224,7 @@ function fillScorerTable(scoringDimensions) {
             maxInput.placeholder = "e.g. 10";
             maxCell.appendChild(maxInput);
 
-            // 新增：添加Delete按钮
+            // New: Add Delete button
             const actionCell = document.createElement('td');
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-row-btn delete-btn';

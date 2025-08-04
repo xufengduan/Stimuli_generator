@@ -115,7 +115,7 @@
                 </div>
                 <p class="description-text">Add multiple example items to help the agent learn.</p>
 
-                <!-- 示例表格容器 -->
+                <!-- Example table container -->
                 <div id="items-container">
                     <!-- Item 1 -->
                     <div class="item-container" id="item-1">
@@ -181,7 +181,7 @@
 - Component 2: ...
 - Manipulation: ...
 💡 Click the info icon (ℹ️) to see a complete example."></textarea>
-                <!-- 添加"AutoGenerate properties"按钮 -->
+                <!-- Add "AutoGenerate properties" button -->
                 <div class="button-container-spaced">
                     <button id="auto_generate_button" class="auto-generate-btn">AutoGenerate properties</button>
                 </div>
@@ -231,6 +231,23 @@
                 </table>
                 <div class="button-container-spaced">
                     <button id="add_agent_2_property_button">Add Validator's property</button>
+                </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <div class="label-container">
+                        <label>
+                            <input type="checkbox" id="agent2_individual_validation" style="margin-right: 8px;" checked>
+                            Individual Criteria Validation
+                        </label>
+                        <div class="tooltip info-icon">
+                            <span class="info-icon-inner">i</span>
+                            <span class="tooltip-text">
+                                <strong>When this option is enabled:</strong><br>
+                                • Agent 2 will validate each criterion individually instead of all at once<br>
+                                • Validation stops immediately when any criterion fails (early rejection)<br>
+                                • May provide more precise validation but increases API calls
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="spacing"></div>
@@ -284,6 +301,23 @@
                 <div class="button-container-spaced">
                     <button id="add_agent_3_property_button">Add Scorer's aspect</button>
                 </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <div class="label-container">
+                        <label>
+                            <input type="checkbox" id="agent3_individual_scoring" style="margin-right: 8px;">
+                            Individual Aspect Scoring
+                        </label>
+                        <div class="tooltip info-icon">
+                            <span class="info-icon-inner">i</span>
+                            <span class="tooltip-text">
+                                <strong>When this option is enabled:</strong><br>
+                                • Agent 3 will score each aspect individually instead of all at once<br>
+                                • Each aspect gets a separate API call for more focused scoring<br>
+                                • May provide more accurate scores but increases API calls
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <h2>Output</h2>
@@ -318,30 +352,45 @@
                 </div>
             </div>
         </div>
-        <!-- 新增输出日志区域 -->
+        <!-- Add output log area -->
         <h2>Generation Log</h2>
         <div class="pale-blue-section">
             <div class="log-container">
                 <div class="log-panel">
                     <div class="log-header">
-                        <i class="fas fa-lightbulb agent-icon generator-icon"></i>
-                        <h3>Generator</h3>
+                        <div class="log-header-left">
+                            <i class="fas fa-lightbulb agent-icon generator-icon"></i>
+                            <h3>Generator</h3>
+                        </div>
+                        <button class="log-clear-btn" onclick="clearLog('generator-log')">
+                            <i class="fas fa-trash-alt"></i> Clear
+                        </button>
                     </div>
                     <div class="log-content" id="generator-log"></div>
                 </div>
 
                 <div class="log-panel">
                     <div class="log-header">
-                        <i class="fas fa-check-circle agent-icon validator-icon"></i>
-                        <h3>Validator</h3>
+                        <div class="log-header-left">
+                            <i class="fas fa-check-circle agent-icon validator-icon"></i>
+                            <h3>Validator</h3>
+                        </div>
+                        <button class="log-clear-btn" onclick="clearLog('validator-log')">
+                            <i class="fas fa-trash-alt"></i> Clear
+                        </button>
                     </div>
                     <div class="log-content" id="validator-log"></div>
                 </div>
 
                 <div class="log-panel">
                     <div class="log-header">
-                        <i class="fas fa-star agent-icon scorer-icon"></i>
-                        <h3>Scorer</h3>
+                        <div class="log-header-left">
+                            <i class="fas fa-star agent-icon scorer-icon"></i>
+                            <h3>Scorer</h3>
+                        </div>
+                        <button class="log-clear-btn" onclick="clearLog('scorer-log')">
+                            <i class="fas fa-trash-alt"></i> Clear
+                        </button>
                     </div>
                     <div class="log-content" id="scorer-log"></div>
                 </div>
