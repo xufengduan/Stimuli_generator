@@ -184,6 +184,7 @@ h2::before {
     margin-top: 10px; 
     margin-bottom: 0;
     padding-bottom: 0;
+    justify-content: center;
 }
 
 label {
@@ -337,6 +338,11 @@ textarea, input[type="text"], input[type="number"], select {
     font-size: 1rem !important;
     color: #445577 !important;
     font-style: normal !important;
+}
+
+textarea {
+    resize: vertical;
+    transition: none;
 }
 
 select {
@@ -595,7 +601,7 @@ tbody tr:hover td {
 }
 
 #stop_button, #delete_row_button, #deleteAgent1PropertyButton, #delete_agent_2_property_button, #delete_agent_3_property_button,
-.delete-component-btn, .delete-item-btn {
+.delete-component-btn, .delete-item-btn, .delete-btn {
     background: linear-gradient(135deg, #FF6B6B, #FF4C4C);
     color: #ffffff;
     border: none;
@@ -623,7 +629,7 @@ tbody tr:hover td {
 
 .delete-component-btn:hover, .delete-item-btn:hover,
 #delete_row_button:hover, #deleteAgent1PropertyButton:hover, 
-#delete_agent_2_property_button:hover, #delete_agent_3_property_button:hover {
+#delete_agent_2_property_button:hover, #delete_agent_3_property_button:hover, .delete-btn:hover {
     background: linear-gradient(135deg, #FF4C4C, #D93939);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -631,7 +637,7 @@ tbody tr:hover td {
 
 .delete-component-btn:active, .delete-item-btn:active,
 #delete_row_button:active, #deleteAgent1PropertyButton:active, 
-#delete_agent_2_property_button:active, #delete_agent_3_property_button:active {
+#delete_agent_2_property_button:active, #delete_agent_3_property_button:active, .delete-btn:active {
     transform: translateY(0);
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
 }
