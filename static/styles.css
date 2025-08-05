@@ -197,7 +197,7 @@ h2::before {
 .button-container-centered {
     display: flex;
     gap: 15px;
-    margin-top: 10px; 
+    margin-top: 10px;
     margin-bottom: 0;
     padding-bottom: 0;
     justify-content: center;
@@ -905,11 +905,30 @@ tbody tr:hover td {
 
 .log-message {
     margin-bottom: 12px;
-    padding: 10px;
+    padding: 12px;
     border-left: 4px solid #e0e0e0;
     background-color: rgba(255, 255, 255, 0.7);
-    border-radius: 4px;
+    border-radius: 6px;
     position: relative;
+    transition: all 0.3s ease;
+    animation: slideInFromLeft 0.4s ease-out;
+}
+
+@keyframes slideInFromLeft {
+    0% {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.log-message:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .log-message:last-child {
@@ -918,22 +937,37 @@ tbody tr:hover td {
 
 .log-message.success {
     border-left-color: #4CAF50;
-    background-color: rgba(76, 175, 80, 0.05);
+    border-left-width: 5px;
+    background-color: rgba(76, 175, 80, 0.08);
+    box-shadow: 0 1px 3px rgba(76, 175, 80, 0.2);
 }
 
 .log-message.error {
     border-left-color: #f44336;
-    background-color: rgba(244, 67, 54, 0.05);
+    border-left-width: 5px;
+    background-color: rgba(244, 67, 54, 0.08);
+    box-shadow: 0 1px 3px rgba(244, 67, 54, 0.2);
 }
 
 .log-message.warning {
     border-left-color: #FF9800;
-    background-color: rgba(255, 152, 0, 0.05);
+    border-left-width: 5px;
+    background-color: rgba(255, 152, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(255, 152, 0, 0.2);
 }
 
 .log-message.info {
     border-left-color: #2196F3;
-    background-color: rgba(33, 150, 243, 0.05);
+    border-left-width: 5px;
+    background-color: rgba(33, 150, 243, 0.08);
+    box-shadow: 0 1px 3px rgba(33, 150, 243, 0.2);
+}
+
+.log-message.progress {
+    border-left-color: #9C27B0;
+    border-left-width: 5px;
+    background-color: rgba(156, 39, 176, 0.08);
+    box-shadow: 0 1px 3px rgba(156, 39, 176, 0.2);
 }
 
 .log-timestamp {
@@ -941,11 +975,71 @@ tbody tr:hover td {
     font-size: 0.8rem;
     margin-bottom: 4px;
     font-weight: normal;
+    font-family: 'Consolas', 'Monaco', monospace;
 }
 
 .log-text {
     color: #333;
     font-weight: 500;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+/* Enhanced message styling */
+.log-message.success .log-text {
+    color: #2E7D32;
+}
+
+.log-message.error .log-text {
+    color: #C62828;
+}
+
+.log-message.warning .log-text {
+    color: #EF6C00;
+}
+
+.log-message.info .log-text {
+    color: #1565C0;
+}
+
+.log-message.progress .log-text {
+    color: #7B1FA2;
+}
+
+/* Special styling for JSON outputs */
+.log-message .message-output {
+    font-family: 'Consolas', 'Monaco', monospace;
+    line-height: 1.4;
+}
+
+/* Styling for readable JSON format container */
+
+/* Round message styling */
+.log-message .message-round {
+    background: linear-gradient(90deg, #4A90E2, #6dd5fa);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    font-weight: bold;
+    font-size: 1.05em;
+}
+
+/* Pulse animation for progress messages */
+.log-message.progress {
+    animation: slideInFromLeft 0.4s ease-out, progressPulse 2s infinite;
+}
+
+@keyframes progressPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 1px 3px rgba(156, 39, 176, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.4);
+    }
 }
 
 .message-round {
@@ -979,6 +1073,32 @@ tbody tr:hover td {
 
 .json-boolean {
     color: #F57C00;
+}
+
+/* Horizontal JSON format styling */
+.json-key-horizontal {
+    color: #7D2E68;
+    font-weight: 600;
+}
+
+.json-string-horizontal {
+    color: #2E7D32;
+    font-weight: normal;
+}
+
+.json-number-horizontal {
+    color: #0277BD;
+    font-weight: 500;
+}
+
+.json-boolean-horizontal {
+    color: #F57C00;
+    font-weight: 500;
+}
+
+.json-null-horizontal {
+    color: #888;
+    font-style: italic;
 }
 
 @keyframes fadeIn {

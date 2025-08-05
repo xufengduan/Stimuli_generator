@@ -505,12 +505,52 @@ function appendLogMessage(logElement, message, className = '') {
 
     // Determine message type based on content and className
     let messageType = className || 'info';
-    if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
+    const lowerMessage = message.toLowerCase();
+
+    // Error messages (red)
+    if (lowerMessage.includes('error') ||
+        lowerMessage.includes('failed') ||
+        lowerMessage.includes('parsing error') ||
+        lowerMessage.includes('invalid response') ||
+        lowerMessage.includes('api error') ||
+        lowerMessage.includes('timeout')) {
         messageType = 'error';
-    } else if (message.toLowerCase().includes('passed') || message.toLowerCase().includes('completed') || message.toLowerCase().includes('success')) {
+    }
+    // Success messages (green)  
+    else if (lowerMessage.includes('passed') ||
+        lowerMessage.includes('completed') ||
+        lowerMessage.includes('success') ||
+        lowerMessage.includes('all criteria passed') ||
+        lowerMessage.includes('all validations passed') ||
+        lowerMessage.includes('individual scoring completed') ||
+        lowerMessage.includes('individual validation completed')) {
         messageType = 'success';
-    } else if (message.toLowerCase().includes('warning') || message.toLowerCase().includes('early rejection') || message.toLowerCase().includes('regenerating')) {
+    }
+    // Warning messages (orange)
+    else if (lowerMessage.includes('warning') ||
+        lowerMessage.includes('early rejection') ||
+        lowerMessage.includes('regenerating') ||
+        lowerMessage.includes('failed validation') ||
+        lowerMessage.includes('stopping validation') ||
+        lowerMessage.includes('detected repeated stimulus')) {
         messageType = 'warning';
+    }
+    // Progress messages (purple) - for step-by-step processes
+    else if (lowerMessage.includes('evaluating aspect') ||
+        lowerMessage.includes('validating criterion') ||
+        lowerMessage.includes('checking') && lowerMessage.includes('criteria') ||
+        (lowerMessage.includes('aspect') && lowerMessage.includes(':') && (lowerMessage.includes('/') || lowerMessage.includes('passed') || lowerMessage.includes('failed'))) ||
+        (lowerMessage.includes('criterion') && lowerMessage.includes(':') && (lowerMessage.includes('passed') || lowerMessage.includes('failed')))) {
+        messageType = 'progress';
+    }
+    // Info messages (blue) - for general information
+    else if (lowerMessage.includes('using individual') ||
+        lowerMessage.includes('using batch') ||
+        lowerMessage.includes('mode') ||
+        lowerMessage.includes('properties:') ||
+        lowerMessage.includes('starting') ||
+        lowerMessage.includes('output:')) {
+        messageType = 'info';
     }
 
     logMessage.className = `log-message ${messageType}`;
@@ -525,10 +565,24 @@ function appendLogMessage(logElement, message, className = '') {
     const textElement = document.createElement('div');
     textElement.className = 'log-text';
 
+    // Format message content with icons
+    let messageIcon = '';
+    if (messageType === 'success') {
+        messageIcon = '<i class="fas fa-check-circle" style="color: #4CAF50; margin-right: 6px;"></i>';
+    } else if (messageType === 'error') {
+        messageIcon = '<i class="fas fa-exclamation-triangle" style="color: #f44336; margin-right: 6px;"></i>';
+    } else if (messageType === 'warning') {
+        messageIcon = '<i class="fas fa-exclamation-circle" style="color: #FF9800; margin-right: 6px;"></i>';
+    } else if (messageType === 'progress') {
+        messageIcon = '<i class="fas fa-cog fa-spin" style="color: #9C27B0; margin-right: 6px;"></i>';
+    } else if (messageType === 'info') {
+        messageIcon = '<i class="fas fa-info-circle" style="color: #2196F3; margin-right: 6px;"></i>';
+    }
+
     // Format message content
     if (message.includes('=== No.')) {
         // Use special style for round information
-        textElement.innerHTML = `<span class="message-round">${message}</span>`;
+        textElement.innerHTML = `${messageIcon}<span class="message-round">${message}</span>`;
     } else if (message.includes('Output:')) {
         // Agent output, try to format JSON
         try {
@@ -536,19 +590,19 @@ function appendLogMessage(logElement, message, className = '') {
             const prefix = parts[0];
             const jsonText = parts[1].trim();
 
-            // Try to format JSON
+            // Try to format JSON (horizontal format with colors)
             if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
-                const formattedJson = formatJson(jsonText);
-                textElement.innerHTML = `<span class="message-output">${prefix}Output:</span><br>${formattedJson}`;
+                const coloredJson = formatJsonHorizontal(jsonText);
+                textElement.innerHTML = `${messageIcon}<span class="message-output">${prefix}Output: ${coloredJson}</span>`;
             } else {
-                textElement.innerHTML = `<span class="message-output">${message}</span>`;
+                textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
             }
         } catch (e) {
-            textElement.innerHTML = `<span class="message-output">${message}</span>`;
+            textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
         }
     } else {
         // General message
-        textElement.innerHTML = `<span class="message-output">${message}</span>`;
+        textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
     }
 
     // Append timestamp and text to message container
@@ -562,7 +616,7 @@ function appendLogMessage(logElement, message, className = '') {
     logElement.scrollTop = logElement.scrollHeight;
 }
 
-// Format JSON string
+// Format JSON string (multi-line version)
 function formatJson(jsonString) {
     try {
         const obj = JSON.parse(jsonString);
@@ -572,7 +626,17 @@ function formatJson(jsonString) {
     }
 }
 
-// JSON syntax highlighting
+// Format JSON string (compact single-line version)
+function formatJsonCompact(jsonString) {
+    try {
+        const obj = JSON.parse(jsonString);
+        return syntaxHighlightCompact(obj);
+    } catch (e) {
+        return jsonString;
+    }
+}
+
+// JSON syntax highlighting (multi-line)
 function syntaxHighlight(json) {
     if (typeof json != 'string') {
         json = JSON.stringify(json, undefined, 2);
@@ -594,6 +658,61 @@ function syntaxHighlight(json) {
         }
         return '<span class="' + cls + '">' + match + '</span>';
     });
+}
+
+// JSON syntax highlighting (compact single-line)
+function syntaxHighlightCompact(json) {
+    if (typeof json != 'string') {
+        json = JSON.stringify(json); // No indentation for compact display
+    }
+
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'json-key';
+            } else {
+                cls = 'json-string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+            cls = 'json-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
+}
+
+// Format JSON string (horizontal format with colors)
+function formatJsonHorizontal(jsonString) {
+    try {
+        const obj = JSON.parse(jsonString);
+        const entries = Object.entries(obj);
+
+        const formattedPairs = entries.map(([key, value]) => {
+            let formattedValue;
+
+            if (typeof value === 'string') {
+                formattedValue = `<span class="json-string-horizontal">"${value}"</span>`;
+            } else if (typeof value === 'boolean') {
+                formattedValue = `<span class="json-boolean-horizontal">${value}</span>`;
+            } else if (typeof value === 'number') {
+                formattedValue = `<span class="json-number-horizontal">${value}</span>`;
+            } else if (value === null) {
+                formattedValue = `<span class="json-null-horizontal">null</span>`;
+            } else {
+                formattedValue = `<span class="json-string-horizontal">"${JSON.stringify(value)}"</span>`;
+            }
+
+            return `<span class="json-key-horizontal">"${key}"</span>: ${formattedValue}`;
+        });
+
+        return `{${formattedPairs.join(', ')}}`;
+
+    } catch (e) {
+        return jsonString;
+    }
 }
 
 // Clear log display area
