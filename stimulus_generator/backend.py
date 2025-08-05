@@ -750,8 +750,13 @@ Please return in JSON format with only one field: "{aspect_name}" (integer score
                 max_score=max_score
             )
 
-            # Create properties dict with single aspect
-            single_aspect = {aspect_name: description}
+            # Create properties dict with single aspect (include all details for JSON schema)
+            single_aspect = {aspect_name: {
+                'type': 'integer',
+                'description': description,
+                'minimum': min_score,
+                'maximum': max_score
+            }}
 
             # Get model-specific default params and override temperature
             fixed_params = model_client.get_default_params()
