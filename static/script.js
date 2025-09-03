@@ -1779,6 +1779,36 @@ clearButton.addEventListener('click', () => {
         }
     });
 
+    // Clear custom model configuration fields
+    const customModelFields = [
+        'custom_model_name',
+        'custom_api_url',
+        'custom_params'
+    ];
+    customModelFields.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.value = '';
+        }
+    });
+
+    // Reset checkboxes to default state
+    const agent2IndividualValidation = document.getElementById('agent2_individual_validation');
+    if (agent2IndividualValidation) {
+        agent2IndividualValidation.checked = false; // Set to false as per requirement #4
+    }
+
+    const agent3IndividualScoring = document.getElementById('agent3_individual_scoring');
+    if (agent3IndividualScoring) {
+        agent3IndividualScoring.checked = false;
+    }
+
+    // Hide custom model configuration section
+    const customModelConfig = document.getElementById('custom_model_config');
+    if (customModelConfig) {
+        customModelConfig.style.display = 'none';
+    }
+    
     // Clear all Items, only keep one initial Item
     while (itemsContainer.firstChild) {
         itemsContainer.removeChild(itemsContainer.firstChild);
@@ -2558,7 +2588,7 @@ addAgent2Button.addEventListener('click', function () {
     newRow.innerHTML = `
     <td class="agent_2_properties-column"><input type="text" placeholder="e.g. Synonym"></td>
     <td class="agent_2_description-column"><input type="text" placeholder="e.g. Whether the words in the word pair are synonyms."></td>
-    <td><button class="delete-row-btn">Delete</button></td>
+    <td><button class="delete-row-btn delete-btn">Delete</button></td>
   `;
     tbody.appendChild(newRow);
 });
@@ -2572,7 +2602,7 @@ addAgent3Button.addEventListener('click', function () {
     <td class="agent_3_description-column"><input type="text" placeholder="e.g. How frequent the word pair are used in English"></td>
     <td class="agent_3_minimum-column"><input type="number" min="0" placeholder="e.g. 0"></td>
     <td class="agent_3_maximum-column"><input type="number" min="0" placeholder="e.g. 10"></td>
-    <td><button class="delete-row-btn">Delete</button></td>
+    <td><button class="delete-row-btn delete-btn">Delete</button></td>
   `;
     tbody.appendChild(newRow);
 });
