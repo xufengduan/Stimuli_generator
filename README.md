@@ -32,8 +32,8 @@ Stimulus Generator is a tool based on large language models designed specificall
   - **Scorer**: Scores materials in multiple dimensions
 
 - **🔄 Flexible Model Selection**:
-  - Supports GPT-4 (requires OpenAI API Key)
-  - Supports Meta Llama 3.3 70B Instruct model
+  - Supports OpenAI GPT-4o (requires OpenAI API Key)
+  - Supports Custom Models via OpenAI-compatible APIs (e.g., DeepSeek, Qwen, Meta Llama, Mistral, etc.)
 
 - **📊 Real-time Progress Monitoring**:
   - WebSocket real-time updates of generation progress
@@ -108,13 +108,13 @@ stimulus-generator webui --port 5001
 ![Select Language Model](static/images/select_model.png)
 
 Choose between:
-- GPT-4 (requires OpenAI API Key)
-- Meta Llama 3.3 70B Instruct model
+- GPT-4o (OpenAI)
+- Custom Model (enter API URL and model name; supports DeepSeek, Qwen, Meta Llama, Mistral, etc.)
 
-#### 1.2 Enter API Key (if using GPT-4)
+#### 1.2 Enter API Key (as required by your provider)
 ![Enter API Key](static/images/enter_api_key.png)
 
-If you selected GPT-4, enter your OpenAI API Key in the designated field.
+Enter the API Key for the selected provider (e.g., OpenAI, DeepSeek, etc.) in the designated field.
 
 #### 1.3 Add Example Stimulus Materials
 ![Add Example Materials](static/images/add_examples.png)
@@ -310,8 +310,8 @@ Stimulus Generator 是一个基于大语言模型的刺激材料生成工具，�
   - **Scorer**：对材料进行多维度评分
 
 - **🔄 灵活的模型选择**：
-  - 支持 GPT-4 (需要 OpenAI API Key)
-  - 支持 Meta Llama 3.3 70B Instruct 模型
+  - 支持 OpenAI GPT-4o（需要 OpenAI API Key）
+  - 支持自定义模型（通过 OpenAI 兼容 API；如 DeepSeek、Qwen、Meta Llama、Mistral 等）
 
 - **📊 实时进度监控**：
   - WebSocket 实时更新生成进度
@@ -387,13 +387,13 @@ stimulus-generator webui --port 5001
 ![选择语言模型](static/images/select_model.png)
 
 可选择：
-- GPT-4（需要 OpenAI API Key）
-- Meta Llama 3.3 70B Instruct 模型
+- GPT-4o（OpenAI）
+- 自定义模型（填写 API URL 和模型名称；支持 DeepSeek、Qwen、Meta Llama、Mistral 等）
 
-#### 1.2 输入 API Key（如果使用 GPT-4）
+#### 1.2 输入 API Key（根据所选模型提供商）
 ![输入 API Key](static/images/enter_api_key.png)
 
-如果选择了 GPT-4，请在指定字段中输入您的 OpenAI API Key。
+请在指定字段中输入所选提供商（如 OpenAI、DeepSeek 等）的 API Key。
 
 #### 1.3 添加示例刺激材料
 ![添加示例材料](static/images/add_examples.png)
