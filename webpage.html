@@ -235,16 +235,16 @@
                 <div class="form-group" style="margin-top: 15px;">
                     <div class="label-container">
                         <label>
-                            <input type="checkbox" id="agent2_individual_validation" style="margin-right: 8px;" checked>
+                            <input type="checkbox" id="agent2_individual_validation" style="margin-right: 8px;">
                             Individual Criteria Validation
                         </label>
                         <div class="tooltip info-icon">
                             <span class="info-icon-inner">i</span>
                             <span class="tooltip-text">
                                 <strong>When this option is enabled:</strong><br>
-                                • Agent 2 will validate each criterion individually instead of all at once<br>
+                                • Agent 2 (Validator) will validate each criterion individually instead of all at once<br>
                                 • Validation stops immediately when any criterion fails (early rejection)<br>
-                                • May provide more precise validation but increases API calls
+                                • May provide more precise validation but increases the number of API calls and processing time
                             </span>
                         </div>
                     </div>
@@ -311,9 +311,9 @@
                             <span class="info-icon-inner">i</span>
                             <span class="tooltip-text">
                                 <strong>When this option is enabled:</strong><br>
-                                • Agent 3 will score each aspect individually instead of all at once<br>
+                                • Agent 3 (Scorer) will score each aspect individually instead of all at once<br>
                                 • Each aspect gets a separate API call for more focused scoring<br>
-                                • May provide more accurate scores but increases API calls
+                                • May provide more accurate scores but increases the number of API calls and processing time
                             </span>
                         </div>
                     </div>
