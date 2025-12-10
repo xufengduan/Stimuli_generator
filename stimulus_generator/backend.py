@@ -66,9 +66,19 @@ Please help me construct one item as stimuli for a psycholinguistic experiment b
 
 Experimental stimuli design: {experiment_design}
 
-Existing stimuli: {previous_stimuli}
+Existing stimuli (DO NOT repeat any of these): {previous_stimuli}
 
-Requirement: {generation_requirements} Please return in JSON format.
+Previously rejected stimuli with validation feedback (learn from these failures and avoid similar issues):
+{rejected_stimuli}
+
+CRITICAL REQUIREMENTS:
+1. Generate a COMPLETELY NEW and UNIQUE stimulus that is DIFFERENT from ALL existing stimuli above.
+2. Do NOT repeat or slightly modify any existing stimulus - create something entirely original.
+3. Avoid any content that overlaps with existing or rejected stimuli.
+4. Learn from the rejected stimuli above - understand why they failed validation and avoid making similar mistakes.
+{generation_requirements}
+
+Please return in JSON format.
 """
 
 # ---- Agent 2 Prompt ----
@@ -287,7 +297,6 @@ class CustomModelClient(ModelClient):
         is_deepseek = self.api_url.strip().startswith("https://api.deepseek.com")
 
         if is_deepseek:
-            import time
             rand_stamp = int(time.time())
             # Generate field list
             field_list = ', '.join([f'"{k}"' for k in properties.keys()])
@@ -347,7 +356,7 @@ class CustomModelClient(ModelClient):
                       json.dumps(request_data, indent=2))
 
                 result = call_with_timeout(
-                    self._api_call, (request_data, headers), {}, 60)
+                    self._api_call, (request_data, headers), {}, 600)
 
                 if isinstance(result, dict) and "error" in result:
                     print(f"Custom API timeout attempt {attempt + 1}/3")
@@ -411,8 +420,15 @@ def check_stimulus_repetition(new_stimulus_dict, previous_stimuli_list):
     for existing_stimulus in previous_stimuli_list:
         for key, new_value in new_stimulus_dict.items():
             # If the key exists in existing_stimulus and the values are the same, it is considered a repetition
-            if key in existing_stimulus and existing_stimulus[key].lower() == str(new_value.lower()):
-                return True
+            if key in existing_stimulus:
+                try:
+                    existing_val = str(existing_stimulus[key]).lower()
+                    new_val = str(new_value).lower()
+                    if existing_val == new_val:
+                        return True
+                except (AttributeError, TypeError):
+                    # Skip comparison if values can't be converted to string
+                    continue
 
     return False
 
@@ -422,6 +438,7 @@ def agent_1_generate_stimulus(
         experiment_design,
         previous_stimuli,
         properties,
+        rejected_stimuli=None,
         prompt_template=AGENT_1_PROMPT_TEMPLATE,
         params=None,
         stop_event=None):
@@ -433,11 +450,15 @@ def agent_1_generate_stimulus(
         return {"stimulus": "STOPPED"}
 
     # Use fixed generation_requirements
-    generation_requirements = "Please generate a new stimulus in the same format as the existing stimuli, and ensure that the new stimulus is different from those in the existing stimuli."
+    generation_requirements = "5. Follow the same JSON format as the existing stimuli."
+
+    if rejected_stimuli is None:
+        rejected_stimuli = []
 
     prompt = prompt_template.format(
         experiment_design=experiment_design,
         previous_stimuli=previous_stimuli,
+        rejected_stimuli=rejected_stimuli,
         generation_requirements=generation_requirements
     )
 
@@ -865,6 +886,7 @@ def generate_stimuli(settings):
         return None, None
 
     record_list = []
+    rejected_stimuli_memory = []
     agent_1_properties = settings.get('agent_1_properties', {})
     print("Agent 1 Properties:", agent_1_properties)
     if websocket_callback:
@@ -932,6 +954,7 @@ def generate_stimuli(settings):
             websocket_callback("all", round_message)
 
         # Step 1: Generate stimulus
+        current_retry_count = 0  # Retry counter for this iteration
         while True:
             if check_stop():
                 return None, None
@@ -942,6 +965,7 @@ def generate_stimuli(settings):
                     experiment_design=experiment_design,
                     previous_stimuli=previous_stimuli,
                     properties=agent_1_properties,
+                    rejected_stimuli=rejected_stimuli_memory,
                     prompt_template=AGENT_1_PROMPT_TEMPLATE,
                     params=custom_params,
                     stop_event=stop_event
@@ -950,6 +974,14 @@ def generate_stimuli(settings):
                 if isinstance(stimuli, dict) and stimuli.get('stimulus') == 'STOPPED':
                     if check_stop("Generation stopped after 'Generator'."):
                         return None, None
+
+                # Skip validation if Agent 1 returned an error
+                if isinstance(stimuli, dict) and stimuli.get('stimulus') == 'ERROR/ERROR':
+                    print("Agent 1 returned ERROR, regenerating...")
+                    if websocket_callback:
+                        websocket_callback(
+                            "generator", "Generator returned ERROR, regenerating...")
+                    continue
 
                 print("Agent 1 Output:", stimuli)
                 if websocket_callback:
@@ -963,6 +995,17 @@ def generate_stimuli(settings):
 
                 if check_stimulus_repetition(stimuli, previous_stimuli):
                     repetition_count += 1
+                    current_retry_count += 1
+
+                    # Add retry limit to avoid infinite loops (but never accept duplicates)
+                    max_repetition_retries = 50
+                    if current_retry_count > max_repetition_retries:
+                        error_msg = f"Failed to generate unique stimulus after {max_repetition_retries} attempts. Consider adjusting experiment design or reducing target count."
+                        print(error_msg)
+                        if websocket_callback:
+                            websocket_callback("generator", error_msg)
+                        raise Exception(error_msg)
+
                     if ablation["use_agent_2"]:
                         print("Detected repeated stimulus, regenerating...")
 
@@ -1037,11 +1080,35 @@ def generate_stimuli(settings):
                 if failed_fields:
                     # Some fields failed validation
                     validation_fails += 1
+                    current_retry_count += 1
+
+                    # Add to rejected memory (only if it's a valid stimulus, not an error)
+                    is_error_stimulus = (
+                        isinstance(stimuli, dict) and
+                        stimuli.get('stimulus') in ['ERROR/ERROR', 'STOPPED']
+                    )
+                    if not is_error_stimulus:
+                        rejected_item = {
+                            "stimulus": stimuli,
+                            "validation_result": validation_result,
+                            "failed_fields": failed_fields
+                        }
+                        rejected_stimuli_memory.append(rejected_item)
+
                     print(
                         f"Failed validation for fields: {failed_fields}, regenerating...")
                     if websocket_callback:
                         websocket_callback(
                             "validator", f"Failed validation for fields: {failed_fields}, regenerating...")
+
+                    # Check retry limit to avoid infinite loops
+                    max_retries = 50
+                    if current_retry_count > max_retries:
+                        error_msg = f"Failed to generate valid stimulus after {max_retries} attempts. Consider adjusting validation criteria."
+                        print(error_msg)
+                        if websocket_callback:
+                            websocket_callback("validator", error_msg)
+                        raise Exception(error_msg)
 
                     if ablation["use_agent_2"]:
                         continue  # Regenerate

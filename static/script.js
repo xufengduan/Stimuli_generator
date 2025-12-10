@@ -1808,7 +1808,7 @@ clearButton.addEventListener('click', () => {
     if (customModelConfig) {
         customModelConfig.style.display = 'none';
     }
-    
+
     // Clear all Items, only keep one initial Item
     while (itemsContainer.firstChild) {
         itemsContainer.removeChild(itemsContainer.firstChild);
@@ -2099,30 +2099,33 @@ function callOpenAIAPI(prompt) {
 
 
 
-// Add custom model API call function
+// Add custom model API call function (routed through backend to avoid CORS)
 function callcustomAPI(prompt) {
     const apiUrl = document.getElementById('custom_api_url').value.trim();
     const apiKey = document.getElementById('api_key').value.trim();
     const modelName = document.getElementById('custom_model_name').value.trim();
 
+    // Route through backend proxy to avoid CORS issues
     const requestBody = {
+        session_id: sessionId,
+        prompt: prompt,
         model: modelName,
-        messages: [
-            { role: "user", content: prompt }
-        ]
+        api_url: apiUrl,
+        api_key: apiKey
     };
 
-    fetch(apiUrl, {
+    fetch('/api/custom_model_inference', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
     })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`API request failed: ${response.status} ${response.statusText.trim()}`);
+                return response.json().then(err => {
+                    throw new Error(err.error || `API request failed: ${response.status}`);
+                });
             }
             return response.json();
         })
@@ -2130,7 +2133,11 @@ function callcustomAPI(prompt) {
             // Clear safety timeout when API call succeeds
             clearSafetyTimeout();
 
-            const content = data.choices[0].message.content;
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            const content = data.response;
             processAPIResponse(content);
         })
         .catch(error => {
