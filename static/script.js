@@ -1651,8 +1651,15 @@ function checkGenerationStatus() {
                     link.download = currentFile;
                     document.body.appendChild(link); // Add to DOM
 
-                    // Show success message
-                    alert('Stimulus generation complete!');
+                    // Show success message based on whether it's partial or complete
+                    if (data.partial) {
+                        alert('Generation stopped. Partial data saved and will be downloaded.');
+                    } else {
+                        alert('Stimulus generation complete!');
+                    }
+
+                    // Clear waiting flag
+                    window.waitingForStopData = false;
 
                     // Download file
                     setTimeout(() => {
@@ -1675,11 +1682,29 @@ function checkGenerationStatus() {
                     resetUI();
                 }
             } else if (data.status === 'stopped') {
-                // Clear stop status and reset UI
-                console.log("Generation has been stopped by user");
+                // Generation stopped with no partial data available
+                console.log("Generation has been stopped by user with no data to save");
+                window.waitingForStopData = false;
+                alert('Generation stopped. No data was generated.');
                 resetUI();
             } else if (data.status === 'running') {
                 updateProgress(data.progress);
+
+                // Check if we're in stopping state (waiting for partial data to be saved)
+                if (data.stopping) {
+                    console.log("Stopping... waiting for partial data to be saved");
+                    // Show stopping status
+                    const statusTextElement = document.getElementById('generation-status-text');
+                    if (statusTextElement) {
+                        statusTextElement.textContent = 'Stopping... Saving partial data...';
+                        statusTextElement.style.display = 'block';
+                    }
+                    // Poll more frequently while stopping
+                    window.statusCheckTimer = setTimeout(function () {
+                        checkGenerationStatus();
+                    }, 500);
+                    return;
+                }
 
                 // Add extra check - if progress is 100 but status is still running
                 if (data.progress >= 100) {
@@ -1734,21 +1759,22 @@ function checkGenerationStatus() {
 
 stopButton.addEventListener('click', () => {
     // Add confirmation dialogue box
-    const confirmStop = confirm('Are you sure you want to stop?');
+    const confirmStop = confirm('Are you sure you want to stop? Partial data will be saved if available.');
 
     // Only execute stop operation when user clicks "Yes"
     if (confirmStop) {
         fetch(getApiUrl('stop_generation'), { method: 'POST' })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
-                // Immediately stop progress polling to prevent unexpected status check
-                if (window.statusCheckTimer) {
-                    clearTimeout(window.statusCheckTimer);
+                console.log('Stop response:', data.message);
+                // Don't immediately stop polling - continue to wait for partial data
+                // The status check will handle the download when partial data is ready
+                // Set a flag to indicate we're waiting for stop to complete
+                window.waitingForStopData = true;
+                // Continue polling for a bit to get partial data
+                if (!window.statusCheckTimer) {
+                    checkGenerationStatus();
                 }
-                resetUI();
-                // Ensure stop status is displayed
-                updateProgress(0);
             })
             .catch(error => {
                 console.error('Error stopping generation:', error);

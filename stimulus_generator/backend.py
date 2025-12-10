@@ -1,17 +1,16 @@
+import json
+import os
+import queue
+import random
+import time
+import traceback
+from abc import ABC, abstractmethod
+from multiprocessing import Process, Queue
+
 import openai
 import pandas as pd
-import json
-
-import time
-import random
 import requests
-from flask import request, jsonify
-from abc import ABC, abstractmethod
-import threading
-import multiprocessing
-from multiprocessing import Process, Queue
-import queue
-import traceback
+from requests.exceptions import RequestException, Timeout, ConnectionError as RequestsConnectionError
 
 # Set OpenAI API key
 # openai.api_key = ""
@@ -142,7 +141,7 @@ class OpenAIClient(ModelClient):
         self.api_key = api_key
         if api_key:
             openai.api_key = api_key
-            print(f"OpenAI API key set successfully, length: {len(api_key)}")
+            print("OpenAI API key configured successfully")
         else:
             print("Warning: No OpenAI API key provided!")
 
@@ -150,8 +149,6 @@ class OpenAIClient(ModelClient):
         """API call function, will be called by multiprocessing"""
         # set API key in subprocess
         openai.api_key = api_key
-        print(
-            f"OpenAI API key in subprocess: {api_key[:10]}..." if api_key else "None")
 
         return openai.ChatCompletion.create(
             model=params["model"],
@@ -191,12 +188,18 @@ class OpenAIClient(ModelClient):
                 return json.loads(response['choices'][0]['message']['content'])
             except json.JSONDecodeError as e:
                 print(f"Failed to parse OpenAI JSON response: {e}")
-                return {"error": "Failed to parse response"}
-            except Exception as e:
+                return {"error": f"Failed to parse response: {str(e)}"}
+            except (openai.error.APIError, openai.error.RateLimitError) as e:
                 print(f"OpenAI API error attempt {attempt + 1}/3: {e}")
                 if attempt == 2:
-                    return {"error": f"API error after 3 attempts: {str(e)}"}
+                    return {"error": f"OpenAI API error after 3 attempts: {str(e)}"}
                 time.sleep(2 ** attempt)
+            except openai.error.AuthenticationError as e:
+                print(f"OpenAI authentication error: {e}")
+                return {"error": f"Authentication failed: {str(e)}"}
+            except openai.error.InvalidRequestError as e:
+                print(f"OpenAI invalid request: {e}")
+                return {"error": f"Invalid request: {str(e)}"}
 
     def get_default_params(self):
         return {"model": "gpt-4o"}
@@ -283,14 +286,23 @@ class CustomModelClient(ModelClient):
 
     def _api_call(self, request_data, headers):
         """API call function, will be called by multiprocessing"""
-        response = requests.post(
-            self.api_url,
-            headers=headers,
-            json=request_data,
-            timeout=60  # timeout for requests
-        )
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=request_data,
+                timeout=60  # timeout for requests
+            )
+            response.raise_for_status()
+            return response.json()
+        except Timeout:
+            raise Timeout(
+                f"Request to {self.api_url} timed out after 60 seconds")
+        except RequestsConnectionError as e:
+            raise RequestsConnectionError(
+                f"Failed to connect to {self.api_url}: {str(e)}")
+        except RequestException as e:
+            raise RequestException(f"Request failed: {str(e)}")
 
     def generate_completion(self, prompt, properties, params=None):
 
@@ -370,15 +382,28 @@ class CustomModelClient(ModelClient):
                 content = result["choices"][0]["message"]["content"]
                 return json.loads(content)
 
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"Custom API parsing error attempt {attempt + 1}/3: {e}")
+            except json.JSONDecodeError as e:
+                print(
+                    f"Custom API JSON parsing error attempt {attempt + 1}/3: {e}")
                 if attempt == 2:
-                    return {"error": f"API parsing error after 3 attempts: {str(e)}"}
+                    return {"error": f"API JSON parsing error after 3 attempts: {str(e)}"}
                 time.sleep(2 ** attempt)
-            except Exception as e:
-                print(f"Custom API error attempt {attempt + 1}/3: {e}")
+            except KeyError as e:
+                print(
+                    f"Custom API response missing expected key attempt {attempt + 1}/3: {e}")
                 if attempt == 2:
-                    return {"error": f"API error after 3 attempts: {str(e)}"}
+                    return {"error": f"API response missing expected key after 3 attempts: {str(e)}"}
+                time.sleep(2 ** attempt)
+            except (Timeout, RequestsConnectionError) as e:
+                print(
+                    f"Custom API connection error attempt {attempt + 1}/3: {e}")
+                if attempt == 2:
+                    return {"error": f"API connection error after 3 attempts: {str(e)}"}
+                time.sleep(2 ** attempt)
+            except RequestException as e:
+                print(f"Custom API request error attempt {attempt + 1}/3: {e}")
+                if attempt == 2:
+                    return {"error": f"API request error after 3 attempts: {str(e)}"}
                 time.sleep(2 ** attempt)
 
     def get_default_params(self):
@@ -393,7 +418,6 @@ def create_model_client(model_choice, settings=None):
     """Factory function to create appropriate model client"""
     if model_choice == 'GPT-4o':
         api_key = settings.get('api_key') if settings else None
-        print(f"OpenAI API key length: {len(api_key) if api_key else 0}")
         return OpenAIClient(api_key)
     elif model_choice == 'custom':
         if not settings:
@@ -475,8 +499,11 @@ def agent_1_generate_stimulus(
             return {"stimulus": "ERROR/ERROR"}
 
         return result
-    except Exception as e:
-        print(f"Error in agent_1_generate_stimulus: {e}")
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing response in agent_1_generate_stimulus: {e}")
+        return {"stimulus": "ERROR/ERROR"}
+    except (RequestException, Timeout) as e:
+        print(f"Network error in agent_1_generate_stimulus: {e}")
         return {"stimulus": "ERROR/ERROR"}
 
 
@@ -519,9 +546,12 @@ def agent_2_validate_stimulus(
             return {"error": f"Failed to validate stimulus: {result.get('error', 'Unknown error')}"}
 
         return result
-    except Exception as e:
-        print(f"Error in agent_2_validate_stimulus: {e}")
-        return {"error": "Failed to validate stimulus"}
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing validation response: {e}")
+        return {"error": f"Failed to parse validation response: {str(e)}"}
+    except (RequestException, Timeout) as e:
+        print(f"Network error in validation: {e}")
+        return {"error": f"Network error during validation: {str(e)}"}
 
 
 def agent_2_validate_stimulus_individual(
@@ -635,9 +665,12 @@ Please return in JSON format with only one field: "{property_name}" (boolean: tr
                 "validator", "All criteria passed successfully!")
         return validation_results
 
-    except Exception as e:
-        print(f"Error in agent_2_validate_stimulus_individual: {e}")
-        return {"error": "Failed to validate stimulus individually"}
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing individual validation response: {e}")
+        return {"error": f"Failed to parse validation response: {str(e)}"}
+    except (RequestException, Timeout) as e:
+        print(f"Network error in individual validation: {e}")
+        return {"error": f"Network error during validation: {str(e)}"}
 
 
 def generate_scoring_requirements(properties):
@@ -698,8 +731,11 @@ def agent_3_score_stimulus(
             return {field: 0 for field in properties.keys()}
 
         return result
-    except Exception as e:
-        print(f"Error in agent_3_score_stimulus: {e}")
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing scoring response: {e}")
+        return {field: 0 for field in properties.keys()}
+    except (RequestException, Timeout) as e:
+        print(f"Network error in scoring: {e}")
         return {field: 0 for field in properties.keys()}
 
 
@@ -831,8 +867,11 @@ Please return in JSON format with only one field: "{aspect_name}" (integer score
                 "scorer", f"Individual scoring completed! Total: {total_score}/{max_possible}")
         return scoring_results
 
-    except Exception as e:
-        print(f"Error in agent_3_score_stimulus_individual: {e}")
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing individual scoring response: {e}")
+        return {field: 0 for field in properties.keys()}
+    except (RequestException, Timeout) as e:
+        print(f"Network error in individual scoring: {e}")
         return {field: 0 for field in properties.keys()}
 
 
@@ -880,6 +919,41 @@ def generate_stimuli(settings):
                 websocket_callback("all", message)
             return True
         return False
+
+    # Helper function to create partial result when error or stop occurs
+    def create_partial_result(record_list, message, is_error=True):
+        nonlocal total_iterations
+        if len(record_list) > 0:
+            df = pd.DataFrame(record_list)
+            session_id = settings.get('session_id', 'default')
+            timestamp = int(time.time())
+            unique_id = ''.join(random.choice('0123456789abcdef')
+                                for _ in range(6))
+            suffix = "_partial" if is_error else "_stopped"
+            suggested_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}{suffix}.csv"
+
+            df['generation_timestamp'] = timestamp
+            df['batch_id'] = unique_id
+            df['total_iterations'] = total_iterations.value
+            df['stopped_by_user'] = not is_error
+            df['error_occurred'] = is_error
+            df['message'] = message
+            df['completed_iterations'] = len(record_list)
+
+            os.makedirs("outputs", exist_ok=True)
+            suggested_filename = os.path.join("outputs", suggested_filename)
+
+            return df, suggested_filename
+        return None, None
+
+    # Helper function to check stop and return partial data if available
+    def check_stop_and_return(message="Generation stopped by user."):
+        if stop_event.is_set():
+            print(message)
+            if websocket_callback:
+                websocket_callback("all", message)
+            return True, create_partial_result(record_list, message, is_error=False)
+        return False, (None, None)
 
     # Immediately check if stopped
     if check_stop("Generation stopped before starting."):
@@ -945,8 +1019,9 @@ def generate_stimuli(settings):
     # Get actual total iterations
     total_iter_value = total_iterations.value
     for iteration_num in range(total_iter_value):
-        if check_stop():
-            return None, None
+        stopped, partial_result = check_stop_and_return()
+        if stopped:
+            return partial_result
 
         round_message = f"=== No. {iteration_num + 1} Round ==="
         print(round_message)
@@ -956,8 +1031,9 @@ def generate_stimuli(settings):
         # Step 1: Generate stimulus
         current_retry_count = 0  # Retry counter for this iteration
         while True:
-            if check_stop():
-                return None, None
+            stopped, partial_result = check_stop_and_return()
+            if stopped:
+                return partial_result
 
             try:
                 stimuli = agent_1_generate_stimulus(
@@ -972,8 +1048,10 @@ def generate_stimuli(settings):
                 )
 
                 if isinstance(stimuli, dict) and stimuli.get('stimulus') == 'STOPPED':
-                    if check_stop("Generation stopped after 'Generator'."):
-                        return None, None
+                    stopped, partial_result = check_stop_and_return(
+                        "Generation stopped after 'Generator'.")
+                    if stopped:
+                        return partial_result
 
                 # Skip validation if Agent 1 returned an error
                 if isinstance(stimuli, dict) and stimuli.get('stimulus') == 'ERROR/ERROR':
@@ -988,8 +1066,10 @@ def generate_stimuli(settings):
                     websocket_callback(
                         "generator", f"Generator's Output: {json.dumps(stimuli, indent=2)}")
 
-                if check_stop("Generation stopped after 'Generator'."):
-                    return None, None
+                stopped, partial_result = check_stop_and_return(
+                    "Generation stopped after 'Generator'.")
+                if stopped:
+                    return partial_result
 
                 # Step 1.5: Check if stimulus already exists
 
@@ -1004,7 +1084,8 @@ def generate_stimuli(settings):
                         print(error_msg)
                         if websocket_callback:
                             websocket_callback("generator", error_msg)
-                        raise Exception(error_msg)
+                        # Return partial results instead of raising exception
+                        return create_partial_result(record_list, error_msg)
 
                     if ablation["use_agent_2"]:
                         print("Detected repeated stimulus, regenerating...")
@@ -1020,8 +1101,9 @@ def generate_stimuli(settings):
                             websocket_callback(
                                 "generator", "Ablation: Skipping Agent 2 (Repetition Check)")
 
-                if check_stop():
-                    return None, None
+                stopped, partial_result = check_stop_and_return()
+                if stopped:
+                    return partial_result
 
                 # Step 2: Validate stimulus
                 # Check if individual validation is enabled
@@ -1054,16 +1136,20 @@ def generate_stimuli(settings):
                     )
 
                 if isinstance(validation_result, dict) and validation_result.get('error') == 'Stopped by user':
-                    if check_stop("Generation stopped after 'Validator'."):
-                        return None, None
+                    stopped, partial_result = check_stop_and_return(
+                        "Generation stopped after 'Validator'.")
+                    if stopped:
+                        return partial_result
 
                 print("Agent 2 Output:", validation_result)
                 if websocket_callback:
                     websocket_callback(
                         "validator", f"Validator's Output: {json.dumps(validation_result, indent=2)}")
 
-                if check_stop("Generation stopped after 'Validator'."):
-                    return None, None
+                stopped, partial_result = check_stop_and_return(
+                    "Generation stopped after 'Validator'.")
+                if stopped:
+                    return partial_result
 
                 # Check if there was an error first
                 if 'error' in validation_result:
@@ -1094,6 +1180,10 @@ def generate_stimuli(settings):
                             "failed_fields": failed_fields
                         }
                         rejected_stimuli_memory.append(rejected_item)
+                        # Limit memory size to prevent unbounded growth
+                        MAX_REJECTED_MEMORY = 20
+                        if len(rejected_stimuli_memory) > MAX_REJECTED_MEMORY:
+                            rejected_stimuli_memory = rejected_stimuli_memory[-MAX_REJECTED_MEMORY:]
 
                     print(
                         f"Failed validation for fields: {failed_fields}, regenerating...")
@@ -1108,7 +1198,8 @@ def generate_stimuli(settings):
                         print(error_msg)
                         if websocket_callback:
                             websocket_callback("validator", error_msg)
-                        raise Exception(error_msg)
+                        # Return partial results instead of raising exception
+                        return create_partial_result(record_list, error_msg)
 
                     if ablation["use_agent_2"]:
                         continue  # Regenerate
@@ -1147,8 +1238,6 @@ def generate_stimuli(settings):
                     df['error_occurred'] = True
                     df['error_message'] = str(e)
 
-                    import os
-
                     os.makedirs("outputs", exist_ok=True)
                     suggested_filename = os.path.join(
                         "outputs", f"experiment_stimuli_results_{session_id}_{timestamp}_{unique_id}.csv")
@@ -1157,12 +1246,16 @@ def generate_stimuli(settings):
                 else:
                     raise e
 
-        if check_stop("Generation stopped after 'Validator'."):
-            return None, None
+        stopped, partial_result = check_stop_and_return(
+            "Generation stopped after 'Validator'.")
+        if stopped:
+            return partial_result
 
         try:
-            if check_stop("Generation stopped before Scorer."):
-                return None, None
+            stopped, partial_result = check_stop_and_return(
+                "Generation stopped before Scorer.")
+            if stopped:
+                return partial_result
 
             # Step 3: Score
             if ablation["use_agent_3"]:
@@ -1197,16 +1290,20 @@ def generate_stimuli(settings):
 
                 if isinstance(scores, dict) and all(v == 0 for v in scores.values()):
                     if stop_event.is_set():
-                        if check_stop("Generation stopped after 'Scorer'."):
-                            return None, None
+                        stopped, partial_result = check_stop_and_return(
+                            "Generation stopped after 'Scorer'.")
+                        if stopped:
+                            return partial_result
 
                 print("Agent 3 Output:", scores)
                 if websocket_callback:
                     websocket_callback(
                         "scorer", f"Scorer's Output: {json.dumps(scores, indent=2)}")
 
-                if check_stop("Generation stopped after 'Scorer'."):
-                    return None, None
+                stopped, partial_result = check_stop_and_return(
+                    "Generation stopped after 'Scorer'.")
+                if stopped:
+                    return partial_result
             else:
                 print("Ablation: Skipping Agent 3 (Scoring)")
                 if websocket_callback:

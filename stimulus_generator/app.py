@@ -469,16 +469,24 @@ def generate_stimulus(session_id):
                 }
                 df, filename = generate_stimuli(settings)
 
-                # Check if there is a stop signal again
-                if session_state['stop_event'].is_set():
+                # Check if there is a stop signal - but still save partial data if available
+                is_stopped = session_state['stop_event'].is_set()
+                if is_stopped:
                     print(
                         f"Session {session_id} - Stop detected after generation completed.")
-                    return
+                    # Don't return immediately - continue to save any partial data
 
                 # Verify the returned results
                 print(settings["ablation"])
-                if settings["ablation"]["use_agent_2"] == True:
-                    if df is None or filename is None:
+                if df is None or filename is None:
+                    if is_stopped:
+                        # Stopped before any data was generated
+                        print(
+                            f"Session {session_id} - Stopped with no data generated")
+                        websocket_send(
+                            session_id, 'all', "Generation stopped. No data was generated.")
+                        return
+                    else:
                         error_msg = "Generation process returned None for dataframe or filename"
                         print(f"Session {session_id} - {error_msg}")
                         session_state['error_message'] = error_msg
@@ -486,7 +494,8 @@ def generate_stimulus(session_id):
                         websocket_send(session_id, 'error', error_msg)
                         return
 
-                    # Verify the number of generated stimuli
+                # Verify the number of generated stimuli
+                if not is_stopped and settings["ablation"]["use_agent_2"] == True:
                     if len(df) != settings['iteration']:
                         warning_msg = f"Warning: Expected {settings['iteration']} stimuli but got {len(df)}"
                         print(f"Session {session_id} - {warning_msg}")
@@ -519,11 +528,19 @@ def generate_stimulus(session_id):
                         # Use the newly generated file name
                         session_state['generation_file'] = updated_filename
 
-                        # Record the successful completion
-                        print(
-                            f"Session {session_id} - Generation completed successfully. New file: {updated_filename}, Stimuli count: {len(df)}")
-                        websocket_send(
-                            session_id, 'all', f"Generation completed. Generated {len(df)} stimuli.")
+                        # Record the completion status
+                        if is_stopped:
+                            print(
+                                f"Session {session_id} - Generation stopped with partial data. File: {updated_filename}, Stimuli count: {len(df)}")
+                            websocket_send(
+                                session_id, 'all', f"Generation stopped. Saved {len(df)} stimuli.")
+                            # Don't clear stop_event here - let status check handle it
+                            # so it can detect this is a stopped generation with partial data
+                        else:
+                            print(
+                                f"Session {session_id} - Generation completed successfully. New file: {updated_filename}, Stimuli count: {len(df)}")
+                            websocket_send(
+                                session_id, 'all', f"Generation completed. Generated {len(df)} stimuli.")
 
                         # Save the updated session state
                         save_session(session_id, session_state)
@@ -587,15 +604,41 @@ def generation_status(session_id):
 
             # First check stop_event
             if session_state['stop_event'].is_set():
+                # Check if the generation thread is still running
+                thread_running = session_state['generation_thread'] and session_state['generation_thread'].is_alive(
+                )
+
+                if thread_running:
+                    # Thread is still running, wait for it to save partial data
+                    print(
+                        f"Session {session_id} - Stop signal set, waiting for thread to save partial data...")
+                    # Return running status so frontend keeps polling
+                    progress = (session_state['current_iteration'].value /
+                                session_state['total_iterations'].value) * 100
+                    progress = min(100, max(0, progress))
+                    return jsonify({'status': 'running', 'progress': progress, 'stopping': True})
+
                 print(
                     f"Session {session_id} - Generation stopped by user (in-memory check).")
-                # Send additional WebSocket notification
-                websocket_send(session_id, 'all',
-                               "Generation stopped by user.")
-                # Clear the generation file field, ensuring that the previous file is not returned
-                session_state['generation_file'] = None
-                save_session(session_id, session_state)
-                return jsonify({'status': 'stopped'})
+                # Thread has finished - check if there's partial data available for download
+                if session_state['generation_file'] and session_state['dataframe'] is not None:
+                    filename = session_state['generation_file']
+                    row_count = len(session_state['dataframe'])
+                    print(
+                        f"Session {session_id} - Returning partial data file: {filename} with {row_count} rows")
+                    websocket_send(session_id, 'all',
+                                   f"Generation stopped. {row_count} stimuli saved.")
+                    # Clear stop event so we don't keep returning stopped status
+                    session_state['stop_event'].clear()
+                    save_session(session_id, session_state)
+                    return jsonify({'status': 'completed', 'file': filename, 'partial': True})
+                else:
+                    # No data to save
+                    websocket_send(session_id, 'all',
+                                   "Generation stopped by user.")
+                    session_state['generation_file'] = None
+                    save_session(session_id, session_state)
+                    return jsonify({'status': 'stopped'})
 
             if session_state['error_message']:
                 return jsonify({'status': 'error', 'error_message': session_state['error_message']})
@@ -643,14 +686,23 @@ def generation_status(session_id):
 
     # First check stop_event
     if session_state['stop_event'].is_set():
-        # If the stop signal is already set, ensure the frontend knows it has stopped
         print(f"Session {session_id} - Generation stopped by user.")
-        # Send additional WebSocket notification
-        websocket_send(session_id, 'all', "Generation stopped by user.")
-        # Clear the generation file field, ensuring that the previous file is not returned
-        session_state['generation_file'] = None
-        save_session(session_id, session_state)
-        return jsonify({'status': 'stopped'})
+        # Check if there's partial data available for download
+        if session_state['generation_file'] and session_state.get('dataframe') is not None:
+            filename = session_state['generation_file']
+            row_count = len(session_state['dataframe'])
+            print(
+                f"Session {session_id} - Returning partial data file (from disk): {filename} with {row_count} rows")
+            websocket_send(session_id, 'all',
+                           f"Generation stopped. {row_count} stimuli saved.")
+            session_state['stop_event'].clear()
+            save_session(session_id, session_state)
+            return jsonify({'status': 'completed', 'file': filename, 'partial': True})
+        else:
+            websocket_send(session_id, 'all', "Generation stopped by user.")
+            session_state['generation_file'] = None
+            save_session(session_id, session_state)
+            return jsonify({'status': 'stopped'})
 
     if session_state['error_message']:
         return jsonify({'status': 'error', 'error_message': session_state['error_message']})
@@ -687,27 +739,30 @@ def stop_generation(session_id):
             session_state = active_sessions[session_id]
             # Directly set the stop_event in memory
             session_state['stop_event'].set()
-            # Clear the previous file information, preventing the return of old files
-            session_state['generation_file'] = None
+            # Don't clear generation_file here - let the generation thread save partial data
+            # The status check will return the file if partial data is available
             print(
-                f"Session {session_id} - Stop signal set directly in memory. Generation will be stopped immediately.")
+                f"Session {session_id} - Stop signal set directly in memory. Generation will be stopped and partial data saved.")
+            # Send the stop message through WebSocket
+            websocket_send(
+                session_id, 'all', "Stopping... Please wait for partial data to be saved.")
             # Still save to file for persistence
             save_session(session_id, session_state)
-            return jsonify({'message': 'Stimulus generation successfully stopped.'})
+            return jsonify({'message': 'Stopping generation. Partial data will be saved if available.'})
 
     # If there is no active session in the global dictionary, fall back to loading from the file
     session_state = load_session(session_id)
     # Set the stop signal
     session_state['stop_event'].set()
-    # Clear the previous file information, preventing the return of old files
-    session_state['generation_file'] = None
+    # Don't clear generation_file - let the generation thread save partial data
     # Send the stop message through WebSocket
-    websocket_send(session_id, 'all', "Stopping... Please wait.")
+    websocket_send(session_id, 'all',
+                   "Stopping... Please wait for partial data to be saved.")
     print(
         f"Session {session_id} - Stop signal set. Generation will be stopped.")
     # Save the updated state
     save_session(session_id, session_state)
-    return jsonify({'message': 'Stimulus generation successfully stopped.'})
+    return jsonify({'message': 'Stopping generation. Partial data will be saved if available.'})
 
 
 @app.route('/<session_id>/download/<filename>', methods=['GET'])
