@@ -1,3 +1,9 @@
+// All dynamic log text is untrusted, including model-generated JSON keys.
+function escapeLogHtml(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // Global variables
 const generateButton = document.getElementById('generate_button');
 const stopButton = document.getElementById('stop_button');
@@ -31,6 +37,12 @@ let socketBackoffDelay = 1000; // Initial backoff delay
 const maxBackoffDelay = 30000; // Maximum backoff delay (30 seconds)
 let socketConnectionInProgress = false;
 const maxReconnectAttempts = 20; // Maximum reconnection attempts
+
+// Restart countdown variables
+let restartCountdownTimer = null;
+let countdownStartTimer = null;
+const RESTART_INTERVAL = 172000; // 172000 seconds (47.7 hours)
+const COUNTDOWN_DURATION = 1200; // 20 minutes in seconds (20 * 60 = 1200)
 
 // Prompt template for AutoGenerate properties
 const autoGeneratePromptTemplate = `Based on the experimental design and the example stimuli provided below, please complete the following tasks:
@@ -582,7 +594,7 @@ function appendLogMessage(logElement, message, className = '') {
     // Format message content
     if (message.includes('=== No.')) {
         // Use special style for round information
-        textElement.innerHTML = `${messageIcon}<span class="message-round">${message}</span>`;
+        textElement.innerHTML = `${messageIcon}<span class="message-round">${escapeLogHtml(message)}</span>`;
     } else if (message.includes('Output:')) {
         // Agent output, try to format JSON
         try {
@@ -593,16 +605,16 @@ function appendLogMessage(logElement, message, className = '') {
             // Try to format JSON (horizontal format with colors)
             if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
                 const coloredJson = formatJsonHorizontal(jsonText);
-                textElement.innerHTML = `${messageIcon}<span class="message-output">${prefix}Output: ${coloredJson}</span>`;
+                textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(prefix)}Output: ${coloredJson}</span>`;
             } else {
-                textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
+                textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
             }
         } catch (e) {
-            textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
+            textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
         }
     } else {
         // General message
-        textElement.innerHTML = `${messageIcon}<span class="message-output">${message}</span>`;
+        textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
     }
 
     // Append timestamp and text to message container
@@ -694,24 +706,24 @@ function formatJsonHorizontal(jsonString) {
             let formattedValue;
 
             if (typeof value === 'string') {
-                formattedValue = `<span class="json-string-horizontal">"${value}"</span>`;
+                formattedValue = `<span class="json-string-horizontal">"${escapeLogHtml(value)}"</span>`;
             } else if (typeof value === 'boolean') {
-                formattedValue = `<span class="json-boolean-horizontal">${value}</span>`;
+                formattedValue = `<span class="json-boolean-horizontal">${escapeLogHtml(value)}</span>`;
             } else if (typeof value === 'number') {
-                formattedValue = `<span class="json-number-horizontal">${value}</span>`;
+                formattedValue = `<span class="json-number-horizontal">${escapeLogHtml(value)}</span>`;
             } else if (value === null) {
                 formattedValue = `<span class="json-null-horizontal">null</span>`;
             } else {
-                formattedValue = `<span class="json-string-horizontal">"${JSON.stringify(value)}"</span>`;
+                formattedValue = `<span class="json-string-horizontal">"${escapeLogHtml(JSON.stringify(value))}"</span>`;
             }
 
-            return `<span class="json-key-horizontal">"${key}"</span>: ${formattedValue}`;
+            return `<span class="json-key-horizontal">"${escapeLogHtml(key)}"</span>: ${formattedValue}`;
         });
 
         return `{${formattedPairs.join(', ')}}`;
 
     } catch (e) {
-        return jsonString;
+        return escapeLogHtml(jsonString);
     }
 }
 
@@ -752,6 +764,9 @@ function initializePage() {
 
     // Set up UI protection mechanism
     setupUIProtection();
+
+    // Initialize restart countdown system
+    initializeRestartCountdown();
 
     // Display session ID in console for debugging
     console.log(`Initialized page with session ID: ${sessionId}`);
@@ -794,6 +809,20 @@ document.addEventListener('DOMContentLoaded', initializePage);
 
 // Initialize model selection state
 handleModelChange();
+
+// Add page unload event to cleanup timers
+window.addEventListener('beforeunload', () => {
+    cleanupCountdownTimers();
+});
+
+// Add page visibility change event to handle tab switching
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        // Page became visible again, reinitialize countdown if needed
+        console.log('Page became visible, checking countdown status');
+        // Don't reinitialize automatically to avoid conflicts
+    }
+});
 
 // Validate whether AutoGenerate required inputs are filled correctly
 function validateAutoGenerateInputs() {
@@ -1785,10 +1814,9 @@ stopButton.addEventListener('click', () => {
 });
 
 clearButton.addEventListener('click', () => {
-    // Reset model selection
-    document.getElementById('model_choice').value = '';
-    // Disable API key input box
-    document.getElementById('api_key').disabled = true;
+    // Restore the default model after clearing the form.
+    document.getElementById('model_choice').value = 'custom';
+    handleModelChange();
 
     const textAreas = [
         'agent1_properties',
@@ -1829,11 +1857,8 @@ clearButton.addEventListener('click', () => {
         agent3IndividualScoring.checked = false;
     }
 
-    // Hide custom model configuration section
-    const customModelConfig = document.getElementById('custom_model_config');
-    if (customModelConfig) {
-        customModelConfig.style.display = 'none';
-    }
+    // Keep the default custom model configuration visible.
+    handleModelChange();
 
     // Clear all Items, only keep one initial Item
     while (itemsContainer.firstChild) {
@@ -2122,9 +2147,6 @@ function callOpenAIAPI(prompt) {
     }
 }
 
-
-
-
 // Add custom model API call function (routed through backend to avoid CORS)
 function callcustomAPI(prompt) {
     const apiUrl = document.getElementById('custom_api_url').value.trim();
@@ -2177,8 +2199,6 @@ function callcustomAPI(prompt) {
             autoGenerateButton.innerText = "AutoGenerate properties";
         });
 }
-
-
 
 // Process API response
 function processAPIResponse(response) {
@@ -2613,6 +2633,168 @@ agent3PropertiesTable.addEventListener('click', function (e) {
         }
     }
 });
+
+// ===== RESTART COUNTDOWN FUNCTIONALITY =====
+
+/**
+ * Initialize the restart countdown system
+ * This calculates when to show the countdown (20 minutes before restart)
+ * and sets up the timer to start the countdown at the right time
+ */
+function initializeRestartCountdown() {
+    try {
+        // Calculate when the app will restart (RESTART_INTERVAL seconds from now)
+        const appStartTime = Date.now();
+        const restartTime = appStartTime + (RESTART_INTERVAL * 1000);
+
+        // Calculate when to start the countdown (20 minutes before restart)
+        const countdownStartTime = restartTime - (COUNTDOWN_DURATION * 1000);
+        const timeUntilCountdownStart = countdownStartTime - Date.now();
+
+        console.log(`App started at: ${new Date(appStartTime).toLocaleString()}`);
+        console.log(`Restart scheduled for: ${new Date(restartTime).toLocaleString()}`);
+        console.log(`Countdown will start at: ${new Date(countdownStartTime).toLocaleString()}`);
+        console.log(`Time until countdown starts: ${Math.round(timeUntilCountdownStart / 1000)} seconds`);
+
+        // If countdown should start immediately (for testing or if app was restarted recently)
+        if (timeUntilCountdownStart <= 0) {
+            const remainingTime = Math.max(0, Math.round((restartTime - Date.now()) / 1000));
+            if (remainingTime > 0) {
+                console.log(`Starting countdown immediately with ${remainingTime} seconds remaining`);
+                startRestartCountdown(remainingTime);
+            }
+        } else {
+            // Set timer to start countdown at the right time
+            countdownStartTimer = setTimeout(() => {
+                startRestartCountdown(COUNTDOWN_DURATION);
+            }, timeUntilCountdownStart);
+
+            console.log(`Countdown timer set to start in ${Math.round(timeUntilCountdownStart / 1000)} seconds`);
+        }
+    } catch (error) {
+        console.error('Error initializing restart countdown:', error);
+    }
+}
+
+/**
+ * Start the visual countdown timer
+ * @param {number} initialSeconds - Number of seconds to count down from
+ */
+function startRestartCountdown(initialSeconds) {
+    try {
+        let remainingSeconds = initialSeconds;
+
+        // Show the countdown element
+        const countdownElement = document.getElementById('restart-countdown');
+        const countdownTimeElement = document.getElementById('countdown-time');
+
+        if (!countdownElement || !countdownTimeElement) {
+            console.error('Countdown elements not found in DOM');
+            return;
+        }
+
+        countdownElement.style.display = 'block';
+
+        // Update countdown display immediately
+        updateCountdownDisplay(remainingSeconds);
+
+        console.log(`Starting restart countdown: ${remainingSeconds} seconds`);
+
+        // Start the countdown timer (update every second)
+        restartCountdownTimer = setInterval(() => {
+            remainingSeconds--;
+
+            if (remainingSeconds <= 0) {
+                // Countdown finished
+                stopRestartCountdown();
+                console.log('Restart countdown completed - app should restart now');
+            } else {
+                updateCountdownDisplay(remainingSeconds);
+            }
+        }, 1000);
+
+    } catch (error) {
+        console.error('Error starting restart countdown:', error);
+    }
+}
+
+/**
+ * Update the countdown display with current time
+ * @param {number} seconds - Remaining seconds
+ */
+function updateCountdownDisplay(seconds) {
+    try {
+        const minutes = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        const timeString = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+        const countdownTimeElement = document.getElementById('countdown-time');
+        if (countdownTimeElement) {
+            countdownTimeElement.textContent = timeString;
+        }
+
+        // Add visual urgency as time runs out
+        const countdownElement = document.getElementById('restart-countdown');
+        if (countdownElement) {
+            if (seconds <= 60) {
+                // Last minute - add urgent animation
+                countdownElement.style.animationDuration = '0.5s';
+            } else if (seconds <= 300) {
+                // Last 5 minutes - speed up animation
+                countdownElement.style.animationDuration = '1s';
+            }
+        }
+
+    } catch (error) {
+        console.error('Error updating countdown display:', error);
+    }
+}
+
+/**
+ * Stop and hide the countdown timer
+ */
+function stopRestartCountdown() {
+    try {
+        // Clear the countdown timer
+        if (restartCountdownTimer) {
+            clearInterval(restartCountdownTimer);
+            restartCountdownTimer = null;
+        }
+
+        // Hide the countdown element
+        const countdownElement = document.getElementById('restart-countdown');
+        if (countdownElement) {
+            countdownElement.style.display = 'none';
+        }
+
+        console.log('Restart countdown stopped and hidden');
+
+    } catch (error) {
+        console.error('Error stopping restart countdown:', error);
+    }
+}
+
+/**
+ * Cleanup countdown timers (called when page unloads or app shuts down)
+ */
+function cleanupCountdownTimers() {
+    try {
+        if (countdownStartTimer) {
+            clearTimeout(countdownStartTimer);
+            countdownStartTimer = null;
+        }
+
+        if (restartCountdownTimer) {
+            clearInterval(restartCountdownTimer);
+            restartCountdownTimer = null;
+        }
+
+        console.log('Countdown timers cleaned up');
+
+    } catch (error) {
+        console.error('Error cleaning up countdown timers:', error);
+    }
+}
 
 // Modify addAgent2Button click handler to add Delete button in new row
 addAgent2Button.addEventListener('click', function () {

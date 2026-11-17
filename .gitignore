@@ -25,4 +25,8 @@ build/
 
 # Logs
 *.log 
-sessions/ 
+sessions/
+.venv/
+.pytest_cache/
+*.pyc
+outputs/

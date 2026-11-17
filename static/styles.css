@@ -93,6 +93,17 @@ h2::before {
     line-height: 1.4;
 }
 
+.component-tip {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border-left: 4px solid #b7791f;
+    border-radius: 6px;
+    background-color: #fff7db;
+    color: #684515;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
 .container {
     max-width: 950px;
     margin: 30px auto;
@@ -1299,4 +1310,268 @@ input[type="number"]::-webkit-inner-spin-button {
     opacity: 0.6;
     pointer-events: none;
     user-select: none;
+}
+
+/* Restart countdown timer styles */
+.restart-countdown {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 9999;
+    background: linear-gradient(135deg, #FF6B6B, #FF4C4C);
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 15px rgba(255, 76, 76, 0.3);
+    border: 2px solid #FF4C4C;
+    animation: countdownPulse 2s infinite;
+    backdrop-filter: blur(10px);
+}
+
+.countdown-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    font-family: 'Arial', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.countdown-content i {
+    font-size: 1rem;
+    color: white;
+    animation: clockTick 1s infinite;
+}
+
+#countdown-time {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: white;
+    min-width: 50px;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+.countdown-label {
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 500;
+    opacity: 0.95;
+}
+
+@keyframes countdownPulse {
+    0%, 100% {
+        box-shadow: 0 4px 15px rgba(255, 76, 76, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 6px 25px rgba(255, 76, 76, 0.5);
+        transform: scale(1.02);
+    }
+}
+
+@keyframes clockTick {
+    0%, 50% {
+        transform: scale(1);
+    }
+    25%, 75% {
+        transform: scale(1.1);
+    }
+}
+
+/* Responsive design for countdown */
+@media (max-width: 768px) {
+    .restart-countdown {
+        top: 10px;
+        left: 10px;
+        padding: 10px 12px;
+    }
+
+    .countdown-content {
+        font-size: 0.8rem;
+        gap: 6px;
+    }
+
+    #countdown-time {
+        font-size: 1rem;
+        min-width: 45px;
+    }
+
+    .countdown-label {
+        font-size: 0.75rem;
+    }
+}
+
+/* Restart notice text styles */
+.restart-notice {
+    color: #d32f2f;
+    font-size: 1rem;
+    font-style: italic;
+    font-family: 'Calibri', sans-serif;
+    margin: 8px 0 4px;
+    padding-left: 2px;
+    line-height: 1.4;
+    opacity: 0.9;
+}
+/* Reference tables are read-only; keep them separate from editable stimuli. */
+.custom-model-panel {
+    margin-top: 14px;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #dbe7ef;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(38, 74, 103, 0.04);
+}
+
+.custom-model-panel .form-group {
+    margin-bottom: 16px;
+}
+
+.component-tip {
+    padding: 16px 18px;
+    border-left: 4px solid #398d98;
+    border-radius: 10px;
+    background: #eef7f8;
+    color: #31545f;
+}
+
+.component-tip p {
+    margin: 0 0 12px;
+}
+
+.component-tip p > strong {
+    color: #176473;
+}
+
+.component-example-table,
+.model-reference-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    overflow: hidden;
+    border: 1px solid #dce8ef;
+    border-radius: 9px;
+    box-shadow: none;
+}
+
+.component-example-table th,
+.component-example-table td {
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid #e2edef;
+    background: #ffffff;
+    color: #365461;
+}
+
+.component-example-table thead th {
+    background: #dceef0;
+    color: #285e69;
+}
+
+.component-example-table tbody th {
+    font-weight: 600;
+    width: 40%;
+    background: #f6fbfb;
+}
+
+.component-example-table tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+.model-reference {
+    margin-bottom: 22px;
+}
+
+.model-reference h3 {
+    margin: 0 0 12px;
+    color: #294f68;
+    font-size: 1rem;
+}
+
+.reference-table-scroll {
+    overflow-x: auto;
+}
+
+.model-reference-table {
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.model-reference-table th,
+.model-reference-table td {
+    padding: 12px;
+    border: 0;
+    border-bottom: 1px solid #e3ecf3;
+    vertical-align: top;
+}
+
+.model-reference-table thead th {
+    background: #315a73;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.model-reference-table tbody td {
+    background: #ffffff;
+    color: #415b70;
+}
+
+.model-reference-table tbody tr:nth-child(even) td {
+    background: #f4f8fc;
+}
+
+.model-reference-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.model-reference-table td:first-child strong {
+    display: inline-block;
+    margin-bottom: 3px;
+    color: #254d68;
+}
+
+.model-reference-table code {
+    overflow-wrap: anywhere;
+    font-size: 0.83rem;
+    color: #415b70;
+}
+
+.model-reference-table td:nth-child(2) code {
+    display: inline-block;
+    padding: 3px 7px;
+    background: #e7eff8;
+    color: #315a83;
+    border-radius: 5px;
+}
+
+.model-reference-table a {
+    display: inline-block;
+    padding: 5px 8px;
+    background: #e9f3fa;
+    color: #23648d;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.model-reference-table a:hover,
+.model-reference-table a:focus-visible {
+    background: #d9eaf6;
+    text-decoration: underline;
+}
+
+.model-reference-note {
+    margin: 9px 0 0;
+    color: #60758a;
+    font-size: 0.82rem;
+}
+
+.model-reference-table th:first-child {
+    width: 52%;
+}
+
+.model-reference-table th:nth-child(2) {
+    width: 23%;
 }

@@ -1,10 +1,13 @@
 from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for
 from flask_cors import CORS
 import json
+import ast
 import uuid
 import os
 import pickle
+import re
 from threading import Event, Thread, Lock
+from functools import wraps
 from multiprocessing import Value
 from .backend import generate_stimuli, custom_model_inference_handler
 from collections import defaultdict
@@ -13,8 +16,8 @@ from flask_socketio import SocketIO, emit
 import time
 
 
-app = Flask(__name__, static_folder=os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static'))
+WEB_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__, static_folder=os.path.join(WEB_ROOT, 'static'))
 CORS(app)
 socketio = SocketIO(
     app,
@@ -31,8 +34,7 @@ socketio = SocketIO(
 )
 
 # Create a session store directory
-SESSION_DIR = os.path.join(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))), 'sessions')
+SESSION_DIR = os.path.join(WEB_ROOT, 'sessions')
 if not os.path.exists(SESSION_DIR):
     os.makedirs(SESSION_DIR)
 
@@ -45,40 +47,33 @@ sessions_lock = Lock()
 
 
 def get_session_file(session_id):
+    if not isinstance(session_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id):
+        raise ValueError("Invalid session ID")
     return os.path.join(SESSION_DIR, f"{session_id}.pkl")
 
 
-def format_stimulus_content(stimulus_content):
-    """
-    Format stimulus_content, convert dictionary format to readable string format
-    From: {'key1': 'value1', 'key2': 'value2'}
-    Convert to: 
-    Key 1: key1
-    Content: value1
-    Key 2: key2
-    Content: value2
-    """
-    if not isinstance(stimulus_content, dict):
-        # If not a dictionary, try to parse string
+def parse_stimulus_content(value):
+    """Read both new JSON and legacy pandas CSV dict representations safely."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
         try:
-            if isinstance(stimulus_content, str):
-                # Try to parse JSON string
-                stimulus_dict = json.loads(stimulus_content)
-            else:
-                return str(stimulus_content)
-        except (json.JSONDecodeError, TypeError):
-            return str(stimulus_content)
-    else:
-        stimulus_dict = stimulus_content
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
-    formatted_lines = []
-    for i, (key, value) in enumerate(stimulus_dict.items(), 1):
-        formatted_lines.append(f"Key {i}: {key}")
-        formatted_lines.append(f"Content: {value}")
-        if i < len(stimulus_dict):  # Don't add empty line after the last item
-            formatted_lines.append("")
 
-    return "\n".join(formatted_lines)
+def format_stimulus_content(stimulus_content):
+    stimulus_dict = parse_stimulus_content(stimulus_content)
+    if not stimulus_dict:
+        return str(stimulus_content)
+    return "\n\n".join(f"Key {i}: {key}\nContent: {value}"
+                          for i, (key, value) in enumerate(stimulus_dict.items(), 1))
 
 
 def expand_stimulus_content_to_columns(df):
@@ -98,17 +93,7 @@ def expand_stimulus_content_to_columns(df):
     for idx, row in df_expanded.iterrows():
         stimulus_content = row['stimulus_content']
 
-        # Parse stimulus_content
-        if not isinstance(stimulus_content, dict):
-            try:
-                if isinstance(stimulus_content, str):
-                    stimulus_dict = json.loads(stimulus_content)
-                else:
-                    stimulus_dict = {}
-            except (json.JSONDecodeError, TypeError):
-                stimulus_dict = {}
-        else:
-            stimulus_dict = stimulus_content
+        stimulus_dict = parse_stimulus_content(stimulus_content)
 
         # Record maximum number of items
         max_items = max(max_items, len(stimulus_dict))
@@ -127,7 +112,7 @@ def expand_stimulus_content_to_columns(df):
         df_expanded[f'Content{i}'] = ''
 
         # Fill data
-    for idx, row_data in enumerate(expanded_data):
+    for idx, row_data in zip(df_expanded.index, expanded_data):
         for col, value in row_data.items():
             df_expanded.at[idx, col] = value
 
@@ -153,15 +138,26 @@ def save_session(session_id, session_state):
     # If there is a dataframe and it is not None, convert it to a CSV string and save it
     if session_state.get('dataframe') is not None:
         try:
-            csv_data = session_state['dataframe'].to_csv(index=False)
+            persisted_df = session_state['dataframe'].copy()
+            if 'stimulus_content' in persisted_df:
+                persisted_df['stimulus_content'] = persisted_df['stimulus_content'].map(
+                    lambda value: json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else value)
+            csv_data = persisted_df.to_csv(index=False)
             serializable_state['dataframe_csv'] = csv_data
         except Exception as e:
             print(
                 f"Error serializing dataframe for session {session_id}: {str(e)}")
 
     try:
-        with open(get_session_file(session_id), 'wb') as f:
-            pickle.dump(serializable_state, f)
+        session_file = get_session_file(session_id)
+        temporary_file = session_file + '.' + uuid.uuid4().hex + '.tmp'
+        try:
+            with open(temporary_file, 'wb') as f:
+                pickle.dump(serializable_state, f)
+            os.replace(temporary_file, session_file)
+        finally:
+            if os.path.exists(temporary_file):
+                os.remove(temporary_file)
     except Exception as e:
         print(f"Error saving session {session_id}: {str(e)}")
 
@@ -302,17 +298,34 @@ def homepage():
 @app.route("/<session_id>")
 def session_homepage(session_id):
     # Return the homepage HTML
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root_dir = WEB_ROOT
     return send_from_directory(root_dir, 'webpage.html')
 
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root_dir = WEB_ROOT
     return send_from_directory(os.path.join(root_dir, 'static'), filename)
 
 
+# Serialize request setup, including thread assignment/start, without blocking workers.
+generation_setup_lock = Lock()
+
+
+def serialize_generation_setup(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if not generation_setup_lock.acquire(blocking=False):
+            return jsonify({'status': 'error', 'message': 'Generation setup is busy. Please retry.'}), 409
+        try:
+            return func(*args, **kwargs)
+        finally:
+            generation_setup_lock.release()
+    return wrapped
+
+
 @app.route('/<session_id>/generate_stimulus', methods=['POST'])
+@serialize_generation_setup
 def generate_stimulus(session_id):
     try:
         # Load or create the session state
@@ -324,36 +337,12 @@ def generate_stimulus(session_id):
                 print(
                     f"Session {session_id} - Thoroughly cleaning previous state before new generation")
 
-                # Stop any running threads
-                session_state['stop_event'].set()
+                # Do not reset shared state while its worker may still be using it.
                 if session_state['generation_thread'] and session_state['generation_thread'].is_alive():
-                    try:
-                        # Try to wait for the thread to end, but not too long
-                        session_state['generation_thread'].join(timeout=0.5)
-                    except Exception as e:
-                        print(
-                            f"Session {session_id} - Error joining previous thread: {str(e)}")
-
-                # Reset all states
-                # Clear the previous stop signal
-                session_state['stop_event'].clear()
-                # Reset the generated file path
-                session_state['generation_file'] = None
-                # Clear the error message before each generation
-                session_state['error_message'] = None
-                session_state['dataframe'] = None  # Reset the dataframe
-                # Clear the old thread reference
-                session_state['generation_thread'] = None
-
-                # Ensure the current iteration count is reset to zero
-                with session_state['current_iteration'].get_lock():
-                    session_state['current_iteration'].value = 0
-
-                # Save the cleared state, ensuring persistence
-                save_session(session_id, session_state)
+                    return jsonify({'status': 'error', 'message': 'Previous generation is still running. Stop it and wait before retrying.'}), 409
 
         data = request.get_json()
-        if not data:
+        if not isinstance(data, dict) or not data:
             error_msg = "Missing request data"
             return jsonify({'status': 'error', 'message': error_msg}), 400
 
@@ -375,10 +364,12 @@ def generate_stimulus(session_id):
 
         # Verify that the iteration count is a positive integer
         try:
+            if type(data['iteration']) is bool or isinstance(data['iteration'], float):
+                raise ValueError('Iteration must be an integer')
             iteration = int(data['iteration'])
             if iteration <= 0:
                 return jsonify({'status': 'error', 'message': 'Iteration must be a positive integer'}), 400
-        except ValueError:
+        except (ValueError, TypeError):
             return jsonify({'status': 'error', 'message': 'Iteration must be a valid number'}), 400
 
         # Check the model choice
@@ -386,14 +377,19 @@ def generate_stimulus(session_id):
         if not model_choice:
             return jsonify({'status': 'error', 'message': 'Please select a model'}), 400
 
+        try:
+            parsed_properties = {key: json.loads(data.get(key, default)) for key, default in (('agent1Properties', '{}'), ('agent2Properties', '{}'), ('agent3Properties', '{}'), ('previousStimuli', '[]'))}
+        except (ValueError, TypeError):
+            return jsonify({'status': 'error', 'message': 'Invalid JSON in agent properties or previous stimuli'}), 400
+
         settings = {
-            'agent_1_properties': json.loads(data.get('agent1Properties', '{}')),
-            'agent_2_properties': json.loads(data.get('agent2Properties', '{}')),
-            'agent_3_properties': json.loads(data.get('agent3Properties', '{}')),
+            'agent_1_properties': parsed_properties['agent1Properties'],
+            'agent_2_properties': parsed_properties['agent2Properties'],
+            'agent_3_properties': parsed_properties['agent3Properties'],
             'api_key': data.get('apiKey', ''),
             'model_choice': model_choice,
             'experiment_design': data['experimentDesign'],
-            'previous_stimuli': json.loads(data.get('previousStimuli', '[]')),
+            'previous_stimuli': parsed_properties['previousStimuli'],
             'iteration': iteration,
             'stop_event': session_state['stop_event'],
             'current_iteration': session_state['current_iteration'],
@@ -411,6 +407,32 @@ def generate_stimulus(session_id):
             settings['params'] = data.get('params', None)
             print(
                 f"Session {session_id} - Custom model parameters: URL={settings['apiUrl']}, Model={settings['modelName']}")
+
+        for name in ('agent_1_properties', 'agent_2_properties', 'agent_3_properties'):
+            if not isinstance(settings[name], dict):
+                return jsonify({'status': 'error', 'message': 'Agent properties must be JSON objects'}), 400
+        if not isinstance(settings['previous_stimuli'], list):
+            return jsonify({'status': 'error', 'message': 'Previous stimuli must be a JSON array'}), 400
+
+        # Reset only after input validation has succeeded.
+        with sessions_lock:
+            # Reset all states
+            # Clear the previous stop signal
+            session_state['stop_event'].clear()
+            # Reset the generated file path
+            session_state['generation_file'] = None
+            # Clear the error message before each generation
+            session_state['error_message'] = None
+            session_state['dataframe'] = None  # Reset the dataframe
+            # Clear the old thread reference
+            session_state['generation_thread'] = None
+
+            # Ensure the current iteration count is reset to zero
+            with session_state['current_iteration'].get_lock():
+                session_state['current_iteration'].value = 0
+
+            # Save the cleared state, ensuring persistence
+            save_session(session_id, session_state)
 
         # Initialize the total iteration count
         with session_state['total_iterations'].get_lock():
@@ -816,26 +838,7 @@ def download_file(session_id, filename):
         print(
             f"Serving file {filename} with {len(df_to_download)} rows for session {session_id}")
 
-        # After download, clear the dataframe and file name in the session to avoid repeated download of old data
-        # Create a delayed cleanup function
-        def delayed_cleanup():
-            # Wait 2 seconds to ensure the file has been fully downloaded
-            time.sleep(2)
-            with sessions_lock:
-                if session_id in active_sessions:
-                    session_state = active_sessions[session_id]
-                    old_filename = session_state.get('generation_file')
-                    if old_filename == filename:  # Ensure we do not clear the new generation results
-                        print(
-                            f"Cleaning up dataframe and filename for session {session_id} after download")
-                        session_state['dataframe'] = None
-                        session_state['generation_file'] = None
-                        save_session(session_id, session_state)
-
-        # Execute cleanup in the background thread, not blocking the current request
-        cleanup_thread = Thread(target=delayed_cleanup)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
+        # Keep results available for retries/repeated downloads until normal expiry.
 
         # Return the CSV file from memory
         try:
@@ -1099,6 +1102,7 @@ if __name__ == '__main__':
             host='0.0.0.0',
             port=int(os.environ.get('PORT', 5000)),
             debug=False,
+            allow_unsafe_werkzeug=True,
             log_output=False
         )
     else:

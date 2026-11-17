@@ -1,4 +1,8 @@
 import json
+import ipaddress
+import socket
+from urllib.parse import urlsplit
+import urllib3
 import os
 import queue
 import random
@@ -33,27 +37,99 @@ def _timeout_target(queue, func, args, kwargs):
 
 def call_with_timeout(func, args, kwargs, timeout_seconds=60):
     """use multiprocessing to implement API call timeout, can force terminate"""
-    queue = Queue()
-    process = Process(target=_timeout_target, args=(queue, func, args, kwargs))
-    process.start()
-    process.join(timeout_seconds)
-
-    if process.is_alive():
-        # force terminate process
-        process.terminate()
-        process.join()
-        print(
-            f"API call timed out after {timeout_seconds} seconds and process was terminated")
-        return {"error": f"API call timed out after {timeout_seconds} seconds"}
-
+    result_queue = Queue()
+    process = Process(target=_timeout_target, args=(result_queue, func, args, kwargs))
+    deadline = time.monotonic() + timeout_seconds
     try:
-        result_type, result = queue.get_nowait()
-        if result_type == 'success':
-            return result
-        else:
-            return {"error": result}
-    except queue.Empty:
-        return {"error": "Process completed but no result returned"}
+        process.start()
+        # Drain the pipe before joining: large results can otherwise block the child.
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return {"error": f"API call timed out after {timeout_seconds} seconds"}
+            try:
+                result_type, result = result_queue.get(timeout=min(0.1, remaining))
+                return result if result_type == 'success' else {"error": result}
+            except queue.Empty:
+                if not process.is_alive():
+                    return {"error": "Process completed but no result returned"}
+    finally:
+        if process.pid is not None:
+            process.join(timeout=0.2)
+            if process.is_alive():
+                process.terminate()
+                process.join()
+        result_queue.close()
+        result_queue.join_thread()
+
+
+def resolve_public_api(api_url):
+    """Resolve once and pin the connection to an inspected public IP."""
+    if not isinstance(api_url, str):
+        raise ValueError("API URL must be a string")
+    parsed = urlsplit(api_url)
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise ValueError("API URL must be an HTTP(S) URL without credentials or fragments")
+    addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
+    if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
+        raise ValueError("API URL must resolve only to public addresses")
+    return parsed, addresses[0][4][0]
+
+
+def post_public_json(api_url, headers, data):
+    parsed, address = resolve_public_api(api_url)
+    port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    kwargs = {'host': address, 'port': port, 'timeout': urllib3.Timeout(connect=10, read=60)}
+    if parsed.scheme == 'https':
+        # Keep certificate verification and SNI tied to the original hostname.
+        pool = urllib3.HTTPSConnectionPool(**kwargs, server_hostname=parsed.hostname,
+                                          assert_hostname=parsed.hostname, cert_reqs='CERT_REQUIRED')
+    else:
+        pool = urllib3.HTTPConnectionPool(**kwargs)
+    response = None
+    try:
+        target = parsed.path or '/'
+        if parsed.query:
+            target += '?' + parsed.query
+        response = pool.request('POST', target, body=json.dumps(data).encode('utf-8'),
+                                headers={**headers, 'Host': parsed.netloc},
+                                redirect=False, retries=False, preload_content=False)
+        if not 200 <= response.status < 300:
+            raise RequestException(f"API returned HTTP {response.status}; redirects are not permitted")
+        body = response.read(8 * 1024 * 1024 + 1)
+        if len(body) > 8 * 1024 * 1024:
+            raise RequestException("API response exceeds 8 MiB")
+        return json.loads(body)
+    except urllib3.exceptions.HTTPError as exc:
+        raise RequestException(f"API connection failed: {exc}") from exc
+    finally:
+        if response is not None:
+            response.close()
+        pool.close()
+
+
+def validate_boolean_result(result, properties):
+    if not isinstance(result, dict) or 'error' in result:
+        return {"error": "Invalid validation response"}
+    if set(result) != set(properties) or any(type(v) is not bool for v in result.values()):
+        return {"error": "Validation response must contain every criterion as a boolean"}
+    return result
+
+
+def validate_scores(result, properties):
+    # Missing/error values stay missing rather than masquerading as actual zero scores.
+    if not isinstance(result, dict) or 'error' in result:
+        return {field: None for field in properties}
+    checked = {}
+    for field, spec in properties.items():
+        value = result.get(field)
+        valid = type(value) in (int, float)
+        if spec.get('type') == 'integer':
+            valid = type(value) is int
+        if valid:
+            valid = spec.get('minimum', float('-inf')) <= value <= spec.get('maximum', float('inf'))
+        checked[field] = value if valid else None
+    return checked
 
 
 # ======================
@@ -61,9 +137,10 @@ def call_with_timeout(func, args, kwargs, timeout_seconds=60):
 # ======================
 # ---- Agent 1 Prompt ----
 AGENT_1_PROMPT_TEMPLATE = """\
-Please help me construct one item as stimuli for a psycholinguistic experiment based on the description: 
+Generate one stimulus item for a psycholinguistic experiment according to the experimental design below.
+Include all condition variants specified in the experimental design.
 
-Experimental stimuli design: {experiment_design}
+Experimental design: {experiment_design}
 
 Existing stimuli (DO NOT repeat any of these): {previous_stimuli}
 
@@ -77,31 +154,35 @@ CRITICAL REQUIREMENTS:
 4. Learn from the rejected stimuli above - understand why they failed validation and avoid making similar mistakes.
 {generation_requirements}
 
-Please return in JSON format.
+Return only a single JSON object that conforms to the supplied response schema, without Markdown code fences or explanatory text.
 """
 
 # ---- Agent 2 Prompt ----
 AGENT_2_PROMPT_TEMPLATE = """\
-Please verify the following NEW STIMULUS with utmost precision, ensuring they meet the Experimental stimuli design and following strict criteria.
+Evaluate the following stimulus against the experimental design and each validation criterion defined in the supplied response schema.
+For each criterion, return true if the stimulus satisfies it and false otherwise.
 
-NEW STIMULUS: {new_stimulus};
+NEW STIMULUS: {new_stimulus}
 
-Experimental stimuli design: {experiment_design}
+Experimental design: {experiment_design}
 
-Please return in JSON format.
+Return only a single JSON object containing every required criterion and no additional fields.
+Use JSON booleans true and false, not strings. Do not include Markdown code fences or explanatory text.
 """
 
 # ---- Agent 3 Prompt ----
 AGENT_3_PROMPT_TEMPLATE = """\
-Please rate the following STIMULUS based on the Experimental stimuli design provided for a psychological experiment:
+Rate the following stimulus on each scoring dimension specified below, using the experimental design as context.
 
 STIMULUS: {valid_stimulus}
-Experimental stimuli design: {experiment_design}
+Experimental design: {experiment_design}
 
 SCORING REQUIREMENTS:
 {scoring_requirements}
 
-Please return in JSON format including the score for each dimension within the specified ranges.
+Follow the description and any scale anchors specified for each dimension. Do not assume that a higher score indicates better quality or greater suitability.
+Return only a single JSON object containing one integer score for every required dimension, within its specified inclusive range.
+Do not include additional fields, Markdown code fences, or explanatory text.
 """
 
 # ---- Agent 1 Stimulus Schema ----
@@ -152,6 +233,7 @@ class OpenAIClient(ModelClient):
 
         return openai.ChatCompletion.create(
             model=params["model"],
+            **{key: params[key] for key in ("temperature", "seed", "top_p", "max_tokens") if key in params},
             messages=[{"role": "user", "content": prompt}],
             response_format={
                 "type": "json_schema",
@@ -287,14 +369,7 @@ class CustomModelClient(ModelClient):
     def _api_call(self, request_data, headers):
         """API call function, will be called by multiprocessing"""
         try:
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=request_data,
-                timeout=60  # timeout for requests
-            )
-            response.raise_for_status()
-            return response.json()
+            return post_public_json(self.api_url, headers, request_data)
         except Timeout:
             raise Timeout(
                 f"Request to {self.api_url} timed out after 60 seconds")
@@ -312,17 +387,19 @@ class CustomModelClient(ModelClient):
             rand_stamp = int(time.time())
             # Generate field list
             field_list = ', '.join([f'"{k}"' for k in properties.keys()])
-            # Determine agent type
-            # If starts with "Please verify the following NEW STIMULUS ", then return at the end of prompt, each field can only return boolean value
-            if prompt.strip().startswith("Please verify the following NEW STIMULUS"):
-                prompt = prompt.rstrip() + \
-                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}, each field can only return boolean values (True/False)"
-            elif prompt.strip().startswith("Please rate the following STIMULUS"):
-                prompt = prompt.rstrip() + \
-                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}, each field can only return numbers"
+            # Recognize revised and legacy prompts, including individual modes.
+            # Keep legacy prefixes for callers that supply their own templates.
+            if prompt.strip().startswith(("Evaluate the following stimulus", "Please verify the following NEW STIMULUS")):
+                value_instruction = "Use JSON booleans true and false, not strings."
+            elif prompt.strip().startswith(("Rate the following stimulus", "Please rate the following STIMULUS")):
+                value_instruction = "Use integer scores within the specified inclusive ranges. Follow each dimension's description and scale direction."
             else:
-                prompt = prompt.rstrip() + \
-                    f"\nPlease return in strict JSON format, fields must include: {field_list}, requirements for each field are as follows: {properties}"
+                value_instruction = "Use the field types specified in the response schema."
+            prompt = prompt.rstrip() + (
+                f"\nReturn only a single JSON object with exactly these fields: {field_list}. "
+                f"Response schema properties: {json.dumps(properties, ensure_ascii=False)}. "
+                f"{value_instruction} Do not include Markdown code fences or explanatory text."
+            )
 
             request_data = {
                 "model": self.model_name,
@@ -355,6 +432,21 @@ class CustomModelClient(ModelClient):
 
         if params is not None:
             request_data.update(params)
+
+        # GPT-5.4 accepts sampling parameters only with reasoning disabled.
+        # Use the provider's native spelling, without overriding explicit effort.
+        if request_data.get('model') in ('gpt-5.4', 'openai/gpt-5.4'):
+            is_openrouter = urlsplit(self.api_url).hostname == 'openrouter.ai'
+            if is_openrouter:
+                if 'reasoning_effort' not in request_data:
+                    request_data.setdefault('reasoning', {'effort': 'none'})
+                effort = request_data.get('reasoning_effort', request_data.get('reasoning', {}).get('effort', 'none'))
+            else:
+                request_data.setdefault('reasoning_effort', 'none')
+                effort = request_data['reasoning_effort']
+            if effort != 'none':
+                for key in ('temperature', 'top_p', 'logprobs'):
+                    request_data.pop(key, None)
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -474,7 +566,7 @@ def agent_1_generate_stimulus(
         return {"stimulus": "STOPPED"}
 
     # Use fixed generation_requirements
-    generation_requirements = "5. Follow the same JSON format as the existing stimuli."
+    generation_requirements = "5. Follow the supplied response schema. Include every required field and no additional fields, even when no existing stimuli are provided."
 
     if rejected_stimuli is None:
         rejected_stimuli = []
@@ -545,7 +637,7 @@ def agent_2_validate_stimulus(
             print(f"Agent 2 API error: {result}")
             return {"error": f"Failed to validate stimulus: {result.get('error', 'Unknown error')}"}
 
-        return result
+        return validate_boolean_result(result, properties)
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         print(f"Error parsing validation response: {e}")
         return {"error": f"Failed to parse validation response: {str(e)}"}
@@ -573,17 +665,19 @@ def agent_2_validate_stimulus_individual(
 
     # Create individual prompt template for each criterion
     individual_prompt_template = """\
-Please verify the following NEW STIMULUS with utmost precision for the specific criterion mentioned below.
+Evaluate the following stimulus against the specific validation criterion below, using the experimental design as context.
 
 NEW STIMULUS: {new_stimulus}
 
-Experimental stimuli design: {experiment_design}
+Experimental design: {experiment_design}
 
 SPECIFIC CRITERION TO VALIDATE:
 Property: {property_name}
-Description: {property_description}
+Criterion specification: {property_description}
 
-Please return in JSON format with only one field: "{property_name}" (boolean: true if criterion is met, false otherwise).
+Return only a single JSON object with exactly one field: "{property_name}".
+Use the JSON boolean true if the criterion is satisfied and false otherwise, not a string.
+Do not include Markdown code fences or explanatory text.
 """
 
     try:
@@ -607,7 +701,7 @@ Please return in JSON format with only one field: "{property_name}" (boolean: tr
                 new_stimulus=new_stimulus,
                 experiment_design=experiment_design,
                 property_name=property_name,
-                property_description=property_description
+                property_description=json.dumps(property_description, ensure_ascii=False)
             )
 
             # Create properties dict with single criterion
@@ -629,6 +723,10 @@ Please return in JSON format with only one field: "{property_name}" (boolean: tr
                     websocket_callback(
                         "validator", f"Error validating criterion {property_name}: {result.get('error', 'Unknown error')}")
                 return {"error": f"Failed to validate criterion {property_name}: {result.get('error', 'Unknown error')}"}
+
+            result = validate_boolean_result(result, single_property)
+            if "error" in result:
+                return result
 
             # Extract the validation result for this criterion
             if property_name in result:
@@ -704,7 +802,7 @@ def agent_3_score_stimulus(
     """
     if stop_event and stop_event.is_set():
         print("Generation stopped by user after API call in agent_3_score_stimulus.")
-        return {field: 0 for field in properties.keys()} if properties else {}
+        return {field: None for field in properties.keys()} if properties else {}
 
     # Generate scoring requirements text
     scoring_requirements = generate_scoring_requirements(properties)
@@ -724,19 +822,19 @@ def agent_3_score_stimulus(
 
         if stop_event and stop_event.is_set():
             print("Generation stopped by user after API call in agent_3_score_stimulus.")
-            return {field: 0 for field in properties.keys()} if properties else {}
+            return {field: None for field in properties.keys()} if properties else {}
 
         if "error" in result:
             print(f"Agent 3 API error: {result}")
-            return {field: 0 for field in properties.keys()}
+            return {field: None for field in properties.keys()}
 
-        return result
+        return validate_scores(result, properties)
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         print(f"Error parsing scoring response: {e}")
-        return {field: 0 for field in properties.keys()}
+        return {field: None for field in properties.keys()}
     except (RequestException, Timeout) as e:
         print(f"Network error in scoring: {e}")
-        return {field: 0 for field in properties.keys()}
+        return {field: None for field in properties.keys()}
 
 
 def agent_3_score_stimulus_individual(
@@ -752,16 +850,16 @@ def agent_3_score_stimulus_individual(
     """
     if stop_event and stop_event.is_set():
         print("Generation stopped by user in agent_3_score_stimulus_individual.")
-        return {field: 0 for field in properties.keys()} if properties else {}
+        return {field: None for field in properties.keys()} if properties else {}
 
     scoring_results = {}
 
     # Create individual prompt template for each aspect
     individual_prompt_template = """\
-Please rate the following STIMULUS based on the specific aspect mentioned below for a psychological experiment:
+Rate the following stimulus on the specific scoring dimension below, using the experimental design as context.
 
 STIMULUS: {valid_stimulus}
-Experimental stimuli design: {experiment_design}
+Experimental design: {experiment_design}
 
 SPECIFIC ASPECT TO SCORE:
 - Aspect Name: {aspect_name}
@@ -771,9 +869,12 @@ SPECIFIC ASPECT TO SCORE:
 - Score Range: You must provide an integer score between {min_score} and {max_score} (inclusive)
 
 SCORING INSTRUCTIONS:
-Rate this stimulus on the "{aspect_name}" dimension based on the provided description. Your score should reflect how well the stimulus meets this criterion, with {min_score} being the lowest possible score and {max_score} being the highest possible score.
+Rate this stimulus on the "{aspect_name}" dimension according to its description and any specified scale anchors.
+Follow the scale direction specified for this dimension. Do not assume that a higher score indicates better quality or greater suitability.
 
-Please return in JSON format with only one field: "{aspect_name}" (integer score within the specified range {min_score}-{max_score}).
+Return only a single JSON object with exactly one field: "{aspect_name}".
+Its value must be an integer between {min_score} and {max_score}, inclusive.
+Do not include Markdown code fences or explanatory text.
 """
 
     try:
@@ -786,7 +887,7 @@ Please return in JSON format with only one field: "{aspect_name}" (integer score
             if stop_event and stop_event.is_set():
                 print(
                     f"Generation stopped by user while scoring {aspect_name}.")
-                return {field: 0 for field in properties.keys()}
+                return {field: None for field in properties.keys()}
 
             if websocket_callback:
                 websocket_callback(
@@ -830,37 +931,23 @@ Please return in JSON format with only one field: "{aspect_name}" (integer score
                 if websocket_callback:
                     websocket_callback(
                         "scorer", f"Error scoring aspect {aspect_name}: {result.get('error', 'Unknown error')}")
-                scoring_results[aspect_name] = 0
+                scoring_results[aspect_name] = None
                 continue
 
             # Extract the scoring result for this aspect
             if aspect_name in result:
-                score = result[aspect_name]
-                # Ensure score is within valid range
-                if isinstance(score, (int, float)):
-                    score = max(min_score, min(max_score, int(score)))
-                    scoring_results[aspect_name] = score
-                    if websocket_callback:
-                        websocket_callback(
-                            "scorer", f"Aspect {aspect_name}: {score}/{max_score}")
-                else:
-                    print(
-                        f"Warning: Invalid score for {aspect_name}, assuming 0")
-                    scoring_results[aspect_name] = 0
-                    if websocket_callback:
-                        websocket_callback(
-                            "scorer", f"Aspect {aspect_name}: 0/{max_score} (invalid response)")
+                scoring_results[aspect_name] = validate_scores(result, single_aspect)[aspect_name]
             else:
                 print(
-                    f"Warning: {aspect_name} not found in result, assuming 0")
-                scoring_results[aspect_name] = 0
+                    f"Warning: {aspect_name} not found in result, recording a missing score")
+                scoring_results[aspect_name] = None
                 if websocket_callback:
                     websocket_callback(
-                        "scorer", f"Aspect {aspect_name}: 0/{max_score} (parsing error)")
+                        "scorer", f"Aspect {aspect_name}: missing/{max_score} (parsing error)")
 
         print("Agent 3 Individual Scoring - All Results:", scoring_results)
         if websocket_callback:
-            total_score = sum(scoring_results.values())
+            total_score = sum(v for v in scoring_results.values() if v is not None)
             max_possible = sum(aspect_details.get('maximum', 10)
                                for aspect_details in properties.values())
             websocket_callback(
@@ -869,10 +956,10 @@ Please return in JSON format with only one field: "{aspect_name}" (integer score
 
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         print(f"Error parsing individual scoring response: {e}")
-        return {field: 0 for field in properties.keys()}
+        return {field: None for field in properties.keys()}
     except (RequestException, Timeout) as e:
         print(f"Network error in individual scoring: {e}")
-        return {field: 0 for field in properties.keys()}
+        return {field: None for field in properties.keys()}
 
 
 # ======================
@@ -1030,7 +1117,11 @@ def generate_stimuli(settings):
 
         # Step 1: Generate stimulus
         current_retry_count = 0  # Retry counter for this iteration
+        attempt_count = 0
         while True:
+            attempt_count += 1
+            if attempt_count > 50:
+                return create_partial_result(record_list, "Generation failed after 50 attempts; check model credentials and responses.")
             stopped, partial_result = check_stop_and_return()
             if stopped:
                 return partial_result
@@ -1319,6 +1410,8 @@ def generate_stimuli(settings):
             }
             if ablation["use_agent_3"]:
                 record.update(scores or {})
+                if any(value is None for value in scores.values()):
+                    record["scoring_error"] = "One or more scores could not be obtained or failed schema validation"
             record_list.append(record)
 
             # Update previous_stimuli

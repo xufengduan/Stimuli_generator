@@ -572,4 +572,38 @@ python run.py webui
 
 本项目采用 [Apache License 2.0](LICENSE) 许可证。详见 LICENSE 文件。
 
-</details> 
+</details>
+
+## Reliability and interface update (2026-11-17)
+
+The generation → validation → scoring → CSV workflow and repetition rule remain
+unchanged. Validation now requires complete boolean responses, failed scores are
+exported as missing values with an error marker, provider failures have bounded
+retries, and active jobs cannot be replaced by duplicate submissions. Downloads
+can be retried, and legacy saved stimulus content is supported. API subprocess
+handling and untrusted HTML output are fixed. Custom endpoints are restricted to
+public HTTP(S) addresses, pinned to checked IPs with TLS verification; redirects
+are rejected.
+
+Prompts now clarify JSON output, boolean criteria, and dimension-specific score
+direction. Prompt wording and effective sampling settings can affect outputs;
+record this revision when comparing with earlier results.
+
+The interface defaults to Custom Model (including after Clear all), provides a
+read-only component example and a three-column API reference for DeepSeek,
+OpenRouter and OpenAI. OpenAI examples use `gpt-5.4` and `openai/gpt-5.4`.
+For these two model IDs, requests default to no reasoning so sampling parameters
+remain supported; explicit higher reasoning effort is retained and incompatible
+sampling parameters are omitted. Existing GPT-4o mode is retained for compatibility.
+Model IDs are examples; check provider availability.
+
+Install development dependencies and run regression checks from the repository:
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+node tests/test_frontend.cjs
+```
+
+The Python package structure, `python run.py` and `stimulus-generator webui` entry
+points are preserved. Tests use simulated API responses and do not consume credits.
