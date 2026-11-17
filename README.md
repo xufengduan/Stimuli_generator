@@ -8,8 +8,6 @@ StimMAS helps psychology researchers create experimental materials from a writte
 
 **New to AI tools? Start with the online app and OpenRouter.** You can follow the complete example below without writing code or installing software. OpenRouter lets you access models from different developers through one account, one API key, and the same API URL. See the [OpenRouter quickstart](https://openrouter.ai/docs/quickstart).
 
-![StimMAS interface: model selection and provider reference](docs/images/stimmas-model-setup.jpg)
-
 ## Contents
 
 - [What the three agents do](#what-the-three-agents-do)
@@ -47,24 +45,24 @@ An **API key** is a private access code that lets StimMAS send requests using yo
 
 ### 2. Fill in Parameter Settings
 
-For the first run, use the existing OpenRouter preset:
+For the first run, use the free OpenRouter preset, [NVIDIA Nemotron 3.5 Super VL (free)](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free). Free endpoints have rate limits; start with a small batch. Find other free options in the [free text model catalog](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free).
 
 | On the StimMAS page | What to select or enter |
 | --- | --- |
 | **Model** | Keep **Predefined Models** selected. |
-| **Model Configuration → Model name** | Select **openai/gpt-5.4 (OpenRouter)** from the dropdown. |
+| **Model Configuration → Model name** | Select **nvidia/nemotron-3.5-super-vl:free (OpenRouter)** from the dropdown. |
 | **API URL** | Filled automatically: `https://openrouter.ai/api/v1/chat/completions` |
 | **Advanced Parameters** | Leave the two default rows: `max_tokens` / `Number` / `2000`; `temperature` / `Number` / `0.7`. |
 | **API Key** | Paste the key you just created **on OpenRouter**. The eye button shows or hides it. |
 
-The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. An OpenRouter key also works when the selected model was developed by OpenAI; you do not need a separate OpenAI key for this route.
+The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. Use your OpenRouter key for this NVIDIA model; no separate NVIDIA key is needed.
 
 **What do these unfamiliar terms mean?**
 
 | Term | Plain-language meaning | Example for this walkthrough |
 | --- | --- | --- |
 | **Provider** | The service receiving the requests and charging your account. | OpenRouter |
-| **Model name** | The exact identifier of the AI model to use. | `openai/gpt-5.4` |
+| **Model name** | The exact identifier of the AI model to use. | `nvidia/nemotron-3.5-super-vl:free` |
 | **API URL** | The web address where StimMAS sends requests. It is different from the provider's homepage. | `https://openrouter.ai/api/v1/chat/completions` |
 | **API Key** | Your private access code, obtained from that provider. | Your own OpenRouter key; the text in this guide is not a working key. |
 
@@ -123,16 +121,14 @@ In **Stimulus Design → Example stimuli**:
 | --- | --- | --- | --- |
 | `Verb` | eat | read | paint |
 | `Name` | Alice | Ben | Clara |
-| `Active` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
-| `Passive` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+| `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
 
 **Avoid repeats:** Put elements that must be unique across stimulus items (e.g., verbs or names) in separate components, and list these components before those that use them.
 
-Here, `Verb` and `Name` come before `Active` and `Passive`. The same verb and name should appear in both sentences **within** an item; different items should use different verbs and names. Keep the component labels and their order consistent across all examples. Use distinct labels within each item.
+Here, `Verb` and `Name` come before `Active Condition` and `Passive Condition`. The same verb and name should appear in both sentences **within** an item; different items should use different verbs and names. Keep the component labels and their order consistent across all examples. Use distinct labels within each item.
 
 **Add component / Delete component** adds or removes the last component row across all example items. **Add item** creates another complete example with the same number of rows. Fill every cell; delete unwanted rows or items instead of leaving them blank.
-
-![Example stimuli and the editable stimulus design template](docs/images/stimmas-stimulus-design.jpg)
 
 <a id="step-3-design"></a>
 ## Step 3: Describe your stimulus design
@@ -142,12 +138,12 @@ The **Stimulus design** box starts with an editable template. Replace the bracke
 ```text
 We are designing stimuli for an experiment investigating how active and passive voice affect sentence comprehension in adult English speakers.
 
-Each stimulus item should contain four components in this order: Verb, Name, Active, and Passive.
+Each stimulus item should contain four components in this order: Verb, Name, Active Condition, and Passive Condition.
 
 The experiment includes two conditions:
 
-- Active: A simple English sentence in the present tense, with the named person as the agent.
-- Passive: A passive-voice version of the same sentence, using a by-phrase that names the same agent.
+- Active Condition: A simple English sentence in the present tense, with the named person as the agent.
+- Passive Condition: A passive-voice version of the same sentence, using a by-phrase that names the same agent.
 
 All stimuli should meet the following requirements:
 
@@ -156,7 +152,7 @@ All stimuli should meet the following requirements:
 - Use common transitive verbs, familiar objects, and plausible everyday events.
 - Use a singular subject and grammatically correct present-tense verb forms.
 - Avoid idioms, ambiguous pronouns, and emotionally disturbing content.
-- Keep the component labels exactly as Verb, Name, Active, and Passive.
+- Keep the component labels exactly as Verb, Name, Active Condition, and Passive Condition.
 
 Stimuli across conditions should be matched for meaning, vocabulary, and event plausibility. Allow the grammatical changes required to form the passive voice; the passive sentence need not have the same word count as the active sentence.
 ```
@@ -173,7 +169,7 @@ Under **Agent Property Settings → Validator**, fill the first row and click **
 | Properties | Description |
 | --- | --- |
 | `SameMeaning` | The active and passive sentences describe the same event with the same agent and object. |
-| `CorrectVoice` | Active is in active voice. Passive is in passive voice and contains a by-phrase naming the agent. |
+| `CorrectVoice` | Active Condition is in active voice. Passive Condition is in passive voice and contains a by-phrase naming the agent. |
 | `SameVerbAndName` | Both sentences use the verb specified in Verb, with the appropriate inflection, and the name specified in Name. |
 | `Grammatical` | Both sentences are grammatical English sentences in the present tense. |
 
@@ -222,8 +218,8 @@ Each row is one generated item. Component labels and values are expanded into pa
 | `stimulus_id` | Generated item number. | `1` |
 | `Key1` / `Content1` | First component label and value. | `Verb` / `wash` |
 | `Key2` / `Content2` | Second component label and value. | `Name` / `David` |
-| `Key3` / `Content3` | Third component label and value. | `Active` / `David washes a cup.` |
-| `Key4` / `Content4` | Fourth component label and value. | `Passive` / `A cup is washed by David.` |
+| `Key3` / `Content3` | Third component label and value. | `Active Condition` / `David washes a cup.` |
+| `Key4` / `Content4` | Fourth component label and value. | `Passive Condition` / `A cup is washed by David.` |
 | `Fluency`, `Plausibility` | Model ratings for the aspects you defined. | Numeric values within your configured ranges. |
 | `validation_fails`, `repetition_count` | Diagnostic counts from attempts to obtain the item. | Non-negative integers. |
 | `scoring_error`, when present | A rating could not be obtained or did not meet the expected format. | Inspect the affected item and missing ratings. |
@@ -235,11 +231,11 @@ Missing ratings are not automatically replaced with zero. Review missing values 
 
 ### Find a different model on OpenRouter
 
-**We recommend OpenRouter for trying and comparing models:** you can keep the same API URL and OpenRouter key while changing the model ID. Browse the [model catalog with text input and output filters](https://openrouter.ai/models?input_modalities=text&output_modalities=text).
+**We recommend OpenRouter for trying and comparing models:** you can keep the same API URL and OpenRouter key while changing the model ID. Browse the [free model catalog with text input and output filters](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free).
 
-1. Open a model's page and copy its exact identifier. For example, the [GPT-5.4 page](https://openrouter.ai/openai/gpt-5.4) uses `openai/gpt-5.4`. Copy the identifier, rather than the display title “OpenAI: GPT-5.4”.
+1. Open a model's page and copy its exact identifier. For example, the [Nemotron 3.5 Super VL (free) page](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free) uses `nvidia/nemotron-3.5-super-vl:free`. Copy the identifier, rather than the display title “NVIDIA: Nemotron 3.5 Super VL (free)”.
 2. In StimMAS, click **Custom Model**. **This clears the preset model name and API URL.** Fill in both fields again.
-3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `openai/`.
+3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `nvidia/`.
 4. Paste `https://openrouter.ai/api/v1/chat/completions` in **API URL** and use your **OpenRouter** key in **API Key**.
 5. Check the model's price, availability, and supported parameters, then run a small pilot. StimMAS needs text responses in the requested JSON format; models can differ in how reliably they follow that format.
 
@@ -247,7 +243,7 @@ For example, a fully filled custom configuration for the model used in the tutor
 
 ```text
 Model:       Custom Model
-Model name:  openai/gpt-5.4
+Model name:  nvidia/nemotron-3.5-super-vl:free
 API URL:     https://openrouter.ai/api/v1/chat/completions
 API Key:     paste your own OpenRouter key here
 ```
@@ -258,7 +254,7 @@ OpenRouter is the recommended starting point; direct DeepSeek and OpenAI access 
 
 | Provider | Example Model name | Complete API URL | Where to get the matching key |
 | --- | --- | --- | --- |
-| **OpenRouter — recommended** | `openai/gpt-5.4` | `https://openrouter.ai/api/v1/chat/completions` | [OpenRouter API keys](https://openrouter.ai/settings/keys) |
+| **OpenRouter — recommended** | `nvidia/nemotron-3.5-super-vl:free` | `https://openrouter.ai/api/v1/chat/completions` | [OpenRouter API keys](https://openrouter.ai/settings/keys) |
 | DeepSeek | `deepseek-flash` | `https://api.deepseek.com/chat/completions` | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
 | OpenAI | `gpt-5.4` | `https://api.openai.com/v1/chat/completions` | [OpenAI API keys](https://platform.openai.com/api-keys) |
 
@@ -276,7 +272,7 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 | **The model name or API URL is blank.** | Switching to Custom Model clears both. Refill both fields, or switch to Predefined Models and select the OpenRouter preset. |
 | **401 / invalid API key** | Check for extra spaces and confirm the key belongs to the selected provider. Use an OpenRouter key with the OpenRouter URL. |
 | **402 / insufficient credits** | Check your provider's balance and any key spending limit. |
-| **404 / model not found** | Check the full model ID and API URL. On OpenRouter, include the prefix, e.g., `openai/gpt-5.4`. |
+| **404 / model not found** | Check the full model ID and API URL. On OpenRouter, include the prefix, e.g., `nvidia/nemotron-3.5-super-vl:free`. |
 | **429 / rate limit** | Check the provider's rate limits and retry later. Free models may have tighter limits. |
 | **Unsupported parameter / 400** | Check which parameter the provider rejects. Remove that row from Advanced Parameters and try a small run again. |
 | **Invalid JSON or incomplete model response** | Try increasing `max_tokens`, simplifying the design, or choosing a model that follows structured-output instructions more reliably. |
@@ -303,12 +299,12 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 
 ### 2. 对照填写 Parameter Settings
 
-网页刚打开时默认选择的是 DeepSeek，**请先改成 OpenRouter**：
+网页刚打开时默认选择的是 DeepSeek，**请先改成 OpenRouter**。OpenRouter 预设使用免费模型 `nvidia/nemotron-3.5-super-vl:free`。其他免费模型可以在[免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free)中找到；免费接口也有调用频率和额度限制，建议先少量试跑：
 
 | 网页上的字段 | 应该怎么填 |
 | --- | --- |
 | **Model** | 保持 **Predefined Models**，也就是使用工具已经准备好的模型配置。 |
-| **Model Configuration → Model name** | 在下拉菜单中选择 **openai/gpt-5.4 (OpenRouter)**。 |
+| **Model Configuration → Model name** | 在下拉菜单中选择 **nvidia/nemotron-3.5-super-vl:free (OpenRouter)**。 |
 | **API URL** | 工具自动填好：`https://openrouter.ai/api/v1/chat/completions`，无需修改。 |
 | **Advanced Parameters** | 先保持默认两行：`max_tokens` / `Number` / `2000`；`temperature` / `Number` / `0.7`。 |
 | **API Key** | 粘贴刚才在 **OpenRouter** 创建的 Key。眼睛按钮可以显示或隐藏它。 |
@@ -318,11 +314,11 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 | 名称 | 含义与完整例子 |
 | --- | --- |
 | **Provider：服务平台** | 你注册、充值、获取 Key 的地方。本教程使用 **OpenRouter**。 |
-| **Model name：模型编号** | 告诉平台要调用哪个 AI。本例是 `openai/gpt-5.4`，包括斜杠前的 `openai/`。 |
+| **Model name：模型编号** | 告诉平台要调用哪个 AI。本例是 `nvidia/nemotron-3.5-super-vl:free`，包括斜杠前的 `nvidia/`。 |
 | **API URL：请求地址** | StimMAS 将你的要求发往哪里。本例完整地址是 `https://openrouter.ai/api/v1/chat/completions`，不能只填 `https://openrouter.ai`。选择预设模型时会自动填写。 |
-| **API Key：账户通行码** | 必须从对应平台获取。本例即使调用 OpenAI 开发的模型，也用 **OpenRouter 的 Key**。 |
+| **API Key：账户通行码** | 必须从对应平台获取。本例调用 NVIDIA 开发的模型，也用 **OpenRouter 的 Key**，不需要另一个 NVIDIA Key。 |
 
-**强烈推荐新手使用 OpenRouter**：以后想尝试不同开发者的模型，通常只需要修改模型编号，仍然使用相同的 OpenRouter 地址和 Key。浏览你想用的模型：[文本输入、文本输出模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text)。
+**强烈推荐新手使用 OpenRouter**：以后想尝试不同开发者的模型，通常只需要修改模型编号，仍然使用相同的 OpenRouter 地址和 Key。浏览你想用的模型：[免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free)。
 
 Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次回复的长度上限，**不是生成 2000 条材料**；`temperature = 0.7` 控制回答的变化程度，并不代表准确率。默认值可以先不动。点击 **JSON preview** 只是查看工具自动生成的参数。
 
@@ -338,8 +334,8 @@ Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次�
 | --- | --- | --- | --- |
 | `Verb` | eat | read | paint |
 | `Name` | Alice | Ben | Clara |
-| `Active` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
-| `Passive` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+| `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
 
 左侧 **Components** 是每一部分的名称，例如 `Verb`；右侧 **Content** 才是实际内容，例如 `eat`。每个 Item 都有自己的一张表，标签和顺序保持一致，同一张表内的标签不要重名。
 
@@ -354,11 +350,11 @@ Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次�
 ```text
 我们正在为一项研究英语主动句与被动句理解的实验设计材料，参与者为成年英语使用者。
 
-每个 Item 按以下顺序包含四个组件：Verb、Name、Active、Passive。组件标签必须保持这四个英文名称。
+每个 Item 按以下顺序包含四个组件：Verb、Name、Active Condition、Passive Condition。组件标签必须保持这四个英文名称。
 
 实验包含两个条件：
-- Active：使用一般现在时的简单英语主动句，人名指代动作的执行者。
-- Passive：与主动句含义相同的被动句，用 by 短语注明同一个动作执行者。
+- Active Condition：使用一般现在时的简单英语主动句，人名指代动作的执行者。
+- Passive Condition：与主动句含义相同的被动句，用 by 短语注明同一个动作执行者。
 
 所有材料必须符合以下要求：
 - 同一 Item 的两个句子使用相同的动词、人名和宾语，并使用正确的词形变化。
@@ -379,7 +375,7 @@ Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次�
 | Properties | Description |
 | --- | --- |
 | `SameMeaning` | 主动句与被动句描述相同事件，动作执行者和宾语相同。 |
-| `CorrectVoice` | Active 是主动句；Passive 是被动句，并含有注明同一执行者的 by 短语。 |
+| `CorrectVoice` | Active Condition 是主动句；Passive Condition 是被动句，并含有注明同一执行者的 by 短语。 |
 | `SameVerbAndName` | 两个句子都使用 Verb 中指定的动词及其正确词形，并使用 Name 中指定的人名。 |
 | `Grammatical` | 两个句子都是语法正确的一般现在时英语句子。 |
 
@@ -413,12 +409,12 @@ CSV 中每行是一组 Item。`Key1` 是第一个组件的标签（例如 `Verb`
 
 ### 7. 换一个 OpenRouter 模型怎么填？
 
-在这个 [文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text) 中打开模型页面，复制完整模型编号。例如 [GPT-5.4](https://openrouter.ai/openai/gpt-5.4) 的编号是 `openai/gpt-5.4`，不是页面显示标题 `OpenAI: GPT-5.4`。
+在这个 [免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free) 中打开模型页面，复制完整模型编号。例如 [Nemotron 3.5 Super VL (free)](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free) 的编号是 `nvidia/nemotron-3.5-super-vl:free`，不是页面显示标题 `NVIDIA: Nemotron 3.5 Super VL (free)`。
 
 回到 StimMAS 点击 **Custom Model**。这会清空模型名称和 URL，需要把下面两项都填上：
 
 ```text
-Model name：openai/gpt-5.4（换模型时，替换为那个模型的完整编号）
+Model name：nvidia/nemotron-3.5-super-vl:free（换模型时，替换为那个模型的完整编号）
 API URL：https://openrouter.ai/api/v1/chat/completions
 API Key：粘贴你自己的 OpenRouter Key
 ```
@@ -429,7 +425,7 @@ API Key：粘贴你自己的 OpenRouter Key
 
 | 遇到的情况 | 先检查什么 |
 | --- | --- |
-| 不知道 API URL 填什么 | 选 **Predefined Models → openai/gpt-5.4 (OpenRouter)**，URL 会自动填好。 |
+| 不知道 API URL 填什么 | 选 **Predefined Models → nvidia/nemotron-3.5-super-vl:free (OpenRouter)**，URL 会自动填好。 |
 | 提示 Key 错误 / 401 | Key 是否来自 OpenRouter？模型是否也选了 OpenRouter？粘贴时有没有多余空格、引号？ |
 | 提示余额不足 / 402 | 检查平台余额以及 Key 的消费上限。 |
 | 提示模型找不到 / 404 | 模型编号是否完整？OpenRouter 的编号通常包含 `开发者/模型`，还要检查完整 URL。 |

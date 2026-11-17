@@ -20,7 +20,7 @@ const generationStatus = document.getElementById('generation_status'); // Get ge
 const autoGenerateButton = document.getElementById('auto_generate_button'); // Get AutoGenerate button element
 const modelPresets = {
     deepseek: { name: 'deepseek-chat', url: 'https://api.deepseek.com/chat/completions' },
-    openrouter: { name: 'openai/gpt-5.4', url: 'https://openrouter.ai/api/v1/chat/completions' },
+    openrouter: { name: 'nvidia/nemotron-3.5-super-vl:free', url: 'https://openrouter.ai/api/v1/chat/completions' },
     openai: { name: 'gpt-5.4', url: 'https://api.openai.com/v1/chat/completions' },
     gpt4o: { name: 'gpt-4o', url: 'https://api.openai.com/v1/chat/completions' }
 };
