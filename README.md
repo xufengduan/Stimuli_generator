@@ -76,6 +76,19 @@ source venv/bin/activate
 pip install -e .
 ```
 
+### Frontend animation bundle
+
+Flask serves the prebuilt React bundle in `static/ui-react.js`; Node.js is only needed when editing the frontend source. After changing `frontend/ui.jsx`, rebuild it with:
+
+```bash
+npm ci
+npm run build
+```
+
+The React controls synchronize with the existing form logic. Animations respect the system's reduced-motion preference.
+
+Advanced Parameters accepts typed name/value rows and automatically builds the API JSON. It supports numbers, text, booleans and structured JSON, with validation for duplicate names and invalid values. The generated JSON is available in a read-only preview.
+
 ## 📝 Usage Instructions
 
 ### Launch Web Interface

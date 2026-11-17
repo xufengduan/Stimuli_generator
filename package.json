@@ -1,0 +1,16 @@
+{
+  "name": "stimmas-ui",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node frontend/build.mjs",
+    "test": "node tests/test_frontend.cjs && node tests/test_parameters.cjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

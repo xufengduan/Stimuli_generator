@@ -18,6 +18,13 @@ const modelChoice = document.getElementById('model_choice');
 const apiKeyInput = document.getElementById('api_key');
 const generationStatus = document.getElementById('generation_status'); // Get generation status element
 const autoGenerateButton = document.getElementById('auto_generate_button'); // Get AutoGenerate button element
+const modelPresets = {
+    deepseek: { name: 'deepseek-chat', url: 'https://api.deepseek.com/chat/completions' },
+    openrouter: { name: 'openai/gpt-5.4', url: 'https://openrouter.ai/api/v1/chat/completions' },
+    openai: { name: 'gpt-5.4', url: 'https://api.openai.com/v1/chat/completions' },
+    gpt4o: { name: 'gpt-4o', url: 'https://api.openai.com/v1/chat/completions' }
+};
+let modelConfigurationMode = 'predefined';
 
 // Log display related elements
 const generatorLog = document.getElementById('generator-log');
@@ -890,6 +897,115 @@ function handleModelChange() {
     }
 }
 
+function applyModelPreset() {
+    const preset = modelPresets[document.getElementById('predefined_model').value];
+    if (!preset) return;
+    document.getElementById('custom_model_name').value = preset.name;
+    document.getElementById('custom_api_url').value = preset.url;
+}
+
+function setModelConfigurationMode(mode) {
+    if (mode !== 'predefined' && mode !== 'custom') return;
+    const nameInput = document.getElementById('custom_model_name');
+    const urlInput = document.getElementById('custom_api_url');
+    const enteringCustomMode = mode === 'custom' && modelConfigurationMode !== 'custom';
+    modelConfigurationMode = mode;
+    const isCustom = mode === 'custom';
+    document.querySelectorAll('[data-model-mode]').forEach(button => {
+        const active = button.dataset.modelMode === mode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+    });
+    document.getElementById('predefined_model').hidden = isCustom;
+    nameInput.hidden = !isCustom;
+    urlInput.readOnly = !isCustom;
+    document.getElementById('model-name-label').htmlFor = isCustom ? 'custom_model_name' : 'predefined_model';
+    if (enteringCustomMode) {
+        nameInput.value = '';
+        urlInput.value = '';
+    } else if (!isCustom) {
+        applyModelPreset();
+    }
+    // Both modes use the existing OpenAI-compatible API configuration.
+    modelChoice.value = 'custom';
+    handleModelChange();
+    window.dispatchEvent(new CustomEvent('stimmas:model-mode', { detail: { mode } }));
+}
+
+function setApiKeyVisibility(visible) {
+    const toggle = document.getElementById('toggle_api_key');
+    apiKeyInput.type = visible ? 'text' : 'password';
+    toggle.setAttribute('aria-label', visible ? 'Hide API key' : 'Show API key');
+    toggle.setAttribute('aria-pressed', String(visible));
+    toggle.querySelector('i').className = visible ? 'far fa-eye-slash' : 'far fa-eye';
+}
+
+function setModelControlsDisabled(disabled) {
+    document.querySelectorAll('[data-model-mode], #predefined_model, #toggle_api_key, [data-parameter-control]').forEach(control => {
+        control.disabled = disabled;
+    });
+    window.dispatchEvent(new CustomEvent('stimmas:controls-disabled', { detail: { disabled } }));
+}
+
+function positionHelpTooltip(tooltip) {
+    if (window.innerWidth <= 600) {
+        tooltip.dataset.placement = 'overlay';
+        return;
+    }
+    const panel = tooltip.querySelector('.tooltip-text');
+    const anchor = tooltip.getBoundingClientRect();
+    const margin = 16;
+    panel.style.removeProperty('--tooltip-max-height');
+    const spaceAbove = anchor.top - 12 - margin;
+    const spaceBelow = window.innerHeight - anchor.bottom - 12 - margin;
+    const showAbove = spaceAbove >= panel.offsetHeight || (spaceBelow < panel.offsetHeight && spaceAbove > spaceBelow);
+    const availableHeight = showAbove ? spaceAbove : spaceBelow;
+    panel.style.setProperty('--tooltip-max-height', `${Math.max(120, availableHeight)}px`);
+    const left = Math.max(margin, Math.min(anchor.left - 28, window.innerWidth - panel.offsetWidth - margin));
+    const top = showAbove ? anchor.top - panel.offsetHeight - 12 : anchor.bottom + 12;
+    panel.style.setProperty('--tooltip-left', `${left}px`);
+    panel.style.setProperty('--tooltip-top', `${Math.max(margin, top)}px`);
+    tooltip.dataset.placement = showAbove ? 'above' : 'below';
+}
+
+let activeHelpTooltip = null;
+document.querySelectorAll('.tooltip.info-icon').forEach(tooltip => {
+    const showHelp = () => {
+        activeHelpTooltip = tooltip;
+        tooltip.classList.remove('is-dismissed');
+        positionHelpTooltip(tooltip);
+    };
+    tooltip.addEventListener('mouseenter', showHelp);
+    tooltip.addEventListener('focusin', showHelp);
+    tooltip.addEventListener('mouseleave', () => {
+        if (activeHelpTooltip === tooltip && !tooltip.contains(document.activeElement)) activeHelpTooltip = null;
+    });
+    tooltip.addEventListener('focusout', () => {
+        if (activeHelpTooltip === tooltip && !tooltip.matches(':hover')) activeHelpTooltip = null;
+    });
+    tooltip.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            tooltip.classList.add('is-dismissed');
+            tooltip.blur();
+            activeHelpTooltip = null;
+        }
+    });
+});
+window.addEventListener('scroll', () => {
+    if (activeHelpTooltip) positionHelpTooltip(activeHelpTooltip);
+}, true);
+window.addEventListener('resize', () => {
+    if (activeHelpTooltip) positionHelpTooltip(activeHelpTooltip);
+});
+
+document.querySelectorAll('[data-model-mode]').forEach(button => {
+    button.addEventListener('click', () => setModelConfigurationMode(button.dataset.modelMode));
+});
+document.getElementById('predefined_model').addEventListener('change', applyModelPreset);
+document.getElementById('toggle_api_key').addEventListener('click', () => {
+    setApiKeyVisibility(apiKeyInput.type === 'password');
+});
+
 // Initial setup: Add event listeners for the first Item's buttons
 document.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
 document.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
@@ -919,7 +1035,16 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Validate whether AutoGenerate required inputs are filled correctly
+function validateAdvancedParameters() {
+    const parameters = document.getElementById('custom_params');
+    if (!parameters.dataset.error) return true;
+    alert(parameters.dataset.error);
+    document.querySelector('#advanced-parameters-root [aria-invalid="true"]')?.focus();
+    return false;
+}
+
 function validateAutoGenerateInputs() {
+    if (!validateAdvancedParameters()) return false;
     const selectedModel = modelChoice.value;
     const apiKey = document.getElementById('api_key').value.trim();
     const experimentDesign = document.getElementById('experiment_design').value.trim();
@@ -1046,8 +1171,8 @@ function addComponentToAllItems() {
     tables.forEach(tbody => {
         const newRow = document.createElement('tr');
         newRow.innerHTML = `
-            <td class="type-column"><input type="text" placeholder="Enter new component"></td>
-            <td class="content-column"><input type="text" placeholder="Enter component's content"></td>
+            <td class="type-column"><input type="text" aria-label="Component"></td>
+            <td class="content-column"><input type="text" aria-label="Content"></td>
         `;
         tbody.appendChild(newRow);
     });
@@ -1107,8 +1232,8 @@ function addNewItem() {
     for (let i = 0; i < rowCount; i++) {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td class="type-column"><input type="text" placeholder="Enter new component"></td>
-            <td class="content-column"><input type="text" placeholder="Enter component's content"></td>
+            <td class="type-column"><input type="text" aria-label="Component"></td>
+            <td class="content-column"><input type="text" aria-label="Content"></td>
         `;
         tbody.appendChild(row);
     }
@@ -1315,6 +1440,7 @@ function updateProgress(progress) {
 
     // Update progress display
     progressBar.style.width = `${roundedProgress}%`;
+    progressBar.parentElement.setAttribute('aria-valuenow', String(roundedProgress));
     document.getElementById('progress_percentage').textContent = `${roundedProgress}%`;
 
     console.log(`Progress bar updated to ${roundedProgress}%`);
@@ -1334,6 +1460,7 @@ function updateProgress(progress) {
         generateButton.disabled = false;
         stopButton.disabled = true;
     }
+    window.dispatchEvent(new CustomEvent('stimmas:progress', { detail: { value: roundedProgress, previous: currentProgress } }));
 }
 
 function resetUI() {
@@ -1357,20 +1484,15 @@ function resetUI() {
     // Enable model selection dropdown
     document.getElementById('model_choice').disabled = false;
 
-    // Determine whether API Key input box is available based on the currently selected model
-    const selectedModel = document.getElementById('model_choice').value;
-    if (selectedModel === 'GPT-4o') {
-        document.getElementById('api_key').disabled = false;
-    } else {
-        document.getElementById('api_key').disabled = true;
-    }
+    handleModelChange();
+    setModelControlsDisabled(false);
 
     // Enable all other input boxes and text areas
     document.getElementById('iteration').disabled = false;
     document.getElementById('experiment_design').disabled = false;
 
     // Enable all input boxes in all tables
-    document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
+    document.querySelectorAll('input[type="text"], input[type="password"], input[type="number"], textarea').forEach(input => {
         if (input.id !== 'api_key') { // API Key input box is excluded
             input.disabled = false;
         }
@@ -1381,6 +1503,7 @@ function resetUI() {
 }
 
 function validateInputs() {
+    if (!validateAdvancedParameters()) return false;
     const selectedModel = modelChoice.value;
     const apiKey = document.getElementById('api_key').value.trim();
     const iteration = document.getElementById('iteration').value.trim();
@@ -1546,6 +1669,7 @@ function startGeneration() {
 
     // Disable model selection dropdown
     document.getElementById('model_choice').disabled = true;
+    setModelControlsDisabled(true);
 
     // Disable all input boxes and text areas
     document.getElementById('api_key').disabled = true;
@@ -1553,7 +1677,7 @@ function startGeneration() {
     document.getElementById('experiment_design').disabled = true;
 
     // Disable all input boxes in all tables
-    document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
+    document.querySelectorAll('input[type="text"], input[type="password"], input[type="number"], textarea').forEach(input => {
         input.disabled = true;
     });
 
@@ -1923,7 +2047,7 @@ clearButton.addEventListener('click', () => {
     textAreas.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
-            element.value = ''; // Clear text box and text area values
+            element.value = id === 'experiment_design' ? element.defaultValue : '';
         }
     });
 
@@ -1939,6 +2063,7 @@ clearButton.addEventListener('click', () => {
             element.value = id === 'custom_params' ? element.defaultValue : '';
         }
     });
+    window.dispatchEvent(new CustomEvent('stimmas:parameters-reset'));
 
     // Reset checkboxes to default state
     const agent2IndividualValidation = document.getElementById('agent2_individual_validation');
@@ -1951,8 +2076,11 @@ clearButton.addEventListener('click', () => {
         agent3IndividualScoring.checked = false;
     }
 
-    // Keep the default custom model configuration visible.
-    handleModelChange();
+    // Restore the default preset and conceal any previously revealed key.
+    modelConfigurationMode = 'predefined';
+    document.getElementById('predefined_model').value = 'deepseek';
+    setModelConfigurationMode('predefined');
+    setApiKeyVisibility(false);
 
     // Clear all Items, only keep one initial Item
     while (itemsContainer.firstChild) {
@@ -1974,8 +2102,8 @@ clearButton.addEventListener('click', () => {
             </thead>
             <tbody>
                 <tr>
-                    <td class="type-column"><input type="text" placeholder="e.g., word pair"></td>
-                    <td class="content-column"><input type="text" placeholder="e.g., math/mathematics"></td>
+                    <td class="type-column"><input type="text" aria-label="Component"></td>
+                    <td class="content-column"><input type="text" aria-label="Content"></td>
                 </tr>
             </tbody>
         </table>
@@ -2050,6 +2178,7 @@ function periodicSocketCheck() {
 function disableAllElements() {
     // Start safety timeout
     startSafetyTimeout();
+    setModelControlsDisabled(true);
 
     // Disable all dropdowns, text boxes, and text areas
     document.querySelectorAll('input, textarea, select').forEach(element => {
@@ -2093,6 +2222,7 @@ function disableAllElements() {
 function enableAllElements() {
     // Clear safety timeout
     clearSafetyTimeout();
+    setModelControlsDisabled(false);
 
     // Enable all dropdowns, text boxes, and text areas
     document.querySelectorAll('input, textarea, select').forEach(element => {
@@ -2228,7 +2358,7 @@ function callOpenAIAPI(prompt) {
             .finally(() => {
                 // Restore button state
                 autoGenerateButton.disabled = false;
-                autoGenerateButton.innerText = "AutoGenerate properties";
+                autoGenerateButton.innerText = "Auto-generate properties";
             });
     } catch (error) {
         // Catch any errors that occur before setting up or executing API call
@@ -2236,7 +2366,7 @@ function callOpenAIAPI(prompt) {
         clearSafetyTimeout();
         enableAllElements();
         autoGenerateButton.disabled = false;
-        autoGenerateButton.innerText = "AutoGenerate properties";
+        autoGenerateButton.innerText = "Auto-generate properties";
         alert(`Error setting up API call: ${error.message}`);
     }
 }
@@ -2253,7 +2383,8 @@ function callcustomAPI(prompt) {
         prompt: prompt,
         model: modelName,
         api_url: apiUrl,
-        api_key: apiKey
+        api_key: apiKey,
+        params: JSON.parse(document.getElementById('custom_params').value || '{}')
     };
 
     fetch('/api/custom_model_inference', {
@@ -2290,7 +2421,7 @@ function callcustomAPI(prompt) {
         })
         .finally(() => {
             autoGenerateButton.disabled = false;
-            autoGenerateButton.innerText = "AutoGenerate properties";
+            autoGenerateButton.innerText = "Auto-generate properties";
         });
 }
 
@@ -2590,7 +2721,7 @@ function startSafetyTimeout() {
             enableAllElements();
             alert("Operation timed out. The page has been unlocked. Please try again.");
             autoGenerateButton.disabled = false;
-            autoGenerateButton.innerText = "AutoGenerate properties";
+            autoGenerateButton.innerText = "Auto-generate properties";
         }
     }, 90000); // 90 second timeout
 }

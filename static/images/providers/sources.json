@@ -1,0 +1,32 @@
+{
+  "retrieved": "2026-11-17",
+  "assets": [
+    {
+      "file": "deepseek.png",
+      "source": "https://www.deepseek.com/favicon.ico",
+      "original_bytes": 209762,
+      "original_dimensions": [
+        225,
+        225
+      ],
+      "dimensions": [
+        48,
+        48
+      ],
+      "bytes": 3091,
+      "optimization": "48px maximum, optimized PNG; served locally at 24px"
+    },
+    {
+      "file": "openrouter.svg",
+      "source": "https://openrouter.ai/brand/logos/transparent/glyph/svg/glyph-grape.svg",
+      "bytes": 563,
+      "optimization": "Original compact SVG; served locally at 24px"
+    },
+    {
+      "file": "openai.svg",
+      "source": "https://openrouter.ai/images/icons/OpenAI.svg",
+      "bytes": 1708,
+      "optimization": "Compact provider logo SVG; served locally at 24px"
+    }
+  ]
+}

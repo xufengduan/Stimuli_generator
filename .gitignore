@@ -30,3 +30,4 @@ sessions/
 .pytest_cache/
 *.pyc
 outputs/
+node_modules/

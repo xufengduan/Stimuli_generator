@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stimulus Generator</title>
+    <title>StimMAS</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.min.js"></script>
@@ -20,393 +20,519 @@
         </div>
     </div>
 
-    <div class="container">
-        <div class="header-container">
-            <h1>Stimulus Generator</h1>
-        </div>
-        <h2>Parameter Settings</h2>
-        <div class="pale-blue-section">
-            <p class="instruction-text">Fill in your experiment design and let the model generate customized stimulus
-                materials.</p>
-            <div class="form-group">
-                <div class="label-container">
-                    <label for="model_choice">Model</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">Select which language model to use for generation.</span>
+    <main class="container">
+        <header class="header-container">
+            <span class="app-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="currentColor"><path d="m28 3 4.5 12.5L45 20l-12.5 4.5L28 37l-4.5-12.5L11 20l12.5-4.5Z"/><path d="m9 3 2.5 6.5L18 12l-6.5 2.5L9 21l-2.5-6.5L0 12l6.5-2.5ZM13 29l2.7 7.3L23 39l-7.3 2.7L13 49l-2.7-7.3L3 39l7.3-2.7Z"/></svg></span>
+            <div class="header-copy">
+                <h1>StimMAS</h1>
+                <p class="instruction-text">Multi-agent AI for psychological stimulus generation.</p>
+            </div>
+            <div class="header-waves" aria-hidden="true">
+                <div class="header-wave-layer"><svg viewBox="0 0 1200 130" preserveAspectRatio="none"><path d="M0 30C230 60 250 120 490 85S725 140 935 55 1080 15 1200 35V200H0Z" fill="#dcecff"/></svg></div>
+                <div class="header-wave-layer"><svg viewBox="0 0 1200 130" preserveAspectRatio="none"><path d="M0 75C250 115 320 75 505 100S790 125 960 65 1110 45 1200 70V200H0Z" fill="#eaf3ff"/></svg></div>
+            </div>
+        </header>
+        <section class="settings-section parameter-section" aria-labelledby="parameter-settings-title">
+            <div class="section-heading">
+                <span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6m4 0h6M4 12h10m4 0h2M4 18h2m4 0h10"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></svg></span>
+                <h2 id="parameter-settings-title">Parameter Settings</h2>
+            </div>
+            <p class="section-introduction">Fill in your experiment design and let the model generate customized stimuli.</p>
+            <div class="pale-blue-section">
+                <input type="hidden" id="model_choice" name="model_choice" value="custom">
+                <div class="setup-step">
+                    <div class="step-heading"><span class="step-number" aria-hidden="true">1</span><h3>Model</h3></div>
+                    <div class="step-content">
+                        <div id="model-mode-root">
+                            <div class="model-mode-selector" role="group" aria-label="Model setup mode">
+                                <button type="button" class="model-mode-button is-active" id="predefined-model-mode" data-model-mode="predefined" aria-pressed="true"><i class="fas fa-layer-group" aria-hidden="true"></i> Predefined Models</button>
+                                <button type="button" class="model-mode-button" id="custom-model-mode" data-model-mode="custom" aria-pressed="false"><i class="fas fa-code" aria-hidden="true"></i> Custom Model</button>
+                            </div>
+                        </div>
+                        <div class="model-reference">
+                            <h3 id="model-reference-title">Common model names and URLs</h3>
+                            <div class="reference-table-scroll" tabindex="0" role="region" aria-labelledby="model-reference-title">
+                                <table class="model-reference-table">
+                                    <thead><tr><th scope="col">Provider</th><th scope="col">Model name</th><th scope="col">API URL</th><th scope="col">Get an API key</th></tr></thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="provider-name"><img class="provider-logo" src="/static/images/providers/deepseek.png" width="24" height="24" alt="" decoding="async"><strong>DeepSeek</strong></span></td>
+                                            <td><code>deepseek-chat</code></td>
+                                            <td><code>https://api.deepseek.com/chat/completions</code></td>
+                                            <td><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek API keys<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="provider-name"><img class="provider-logo" src="/static/images/providers/openrouter.svg" width="24" height="24" alt="" decoding="async"><strong>OpenRouter</strong></span></td>
+                                            <td><code>openai/gpt-5.4</code></td>
+                                            <td><code>https://openrouter.ai/api/v1/chat/completions</code></td>
+                                            <td><a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">OpenRouter API keys<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="provider-name"><img class="provider-logo" src="/static/images/providers/openai.svg" width="24" height="24" alt="" decoding="async"><strong>OpenAI</strong></span></td>
+                                            <td><code>gpt-5.4</code></td>
+                                            <td><code>https://api.openai.com/v1/chat/completions</code></td>
+                                            <td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI API keys<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="model-reference-note">Example model IDs. Check your provider's current model availability.</p>
+                        </div>
                     </div>
                 </div>
-                <select id="model_choice" name="model_choice" onchange="handleModelChange()">
-                    <option value="GPT-4o">GPT-4o</option>
-                    <option value="custom" selected>Custom Model</option>
-                </select>
+                <div id="custom_model_config" class="custom-model-panel">
+                    <div class="setup-step">
+                        <div class="step-heading"><span class="step-number" aria-hidden="true">2</span><h3>Model Configuration</h3></div>
+                        <div class="step-content model-configuration-grid">
+                            <div class="form-group">
+                                <div class="label-container">
+                                    <label id="model-name-label" for="predefined_model">Model name</label>
+                                    <div class="tooltip info-icon" tabindex="0" aria-label="Help: Model name" aria-describedby="field-help-2">
+                                        <span class="info-icon-inner" aria-hidden="true">i</span>
+                                        <div class="tooltip-text markdown-content" id="field-help-2" role="tooltip">
+                                            <h3>Model name</h3>
+                                            <ul>
+                                            <li><strong>Predefined Models:</strong> Select a model to fill in its model name and API URL automatically.</li>
+                                            <li><strong>Custom Model:</strong> Enter the exact model ID supported by your provider, such as <code>deepseek-chat</code>.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <select id="predefined_model" name="predefined_model">
+                                    <option value="deepseek">deepseek-chat (DeepSeek)</option>
+                                    <option value="openrouter">openai/gpt-5.4 (OpenRouter)</option>
+                                    <option value="openai">gpt-5.4 (OpenAI)</option>
+                                    <option value="gpt4o">gpt-4o (OpenAI)</option>
+                                </select>
+                                <input type="text" id="custom_model_name" name="custom_model_name" value="deepseek-chat" hidden>
+                            </div>
+                            <div class="form-group">
+                                <div class="label-container">
+                                    <label for="custom_api_url">API URL</label>
+                                    <div class="tooltip info-icon" tabindex="0" aria-label="Help: API URL" aria-describedby="field-help-3">
+                                        <span class="info-icon-inner" aria-hidden="true">i</span>
+                                        <div class="tooltip-text markdown-content" id="field-help-3" role="tooltip">
+                                            <h3>API URL</h3>
+                                            <p>Use your provider's chat completions endpoint.</p>
+                                            <p>For predefined models, the URL is filled in automatically. Switch to <strong>Custom Model</strong> to enter a different endpoint.</p>
+                                            <p>Example: <code>https://api.deepseek.com/chat/completions</code></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="text" id="custom_api_url" name="custom_api_url" value="https://api.deepseek.com/chat/completions" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="setup-step">
+                        <div class="step-heading">
+                            <span class="step-number" aria-hidden="true">3</span><h3>Advanced Parameters</h3>
+                            <div class="tooltip info-icon" tabindex="0" aria-label="Help: Advanced parameters" aria-describedby="field-help-4">
+                                <span class="info-icon-inner" aria-hidden="true">i</span>
+                                <div class="tooltip-text markdown-content" id="field-help-4" role="tooltip">
+                                    <h3>Advanced parameters</h3>
+                                    <p>Add a parameter name, choose its value type, and enter a value. The form builds the JSON automatically.</p>
+                                    <ul><li><strong>Number:</strong> Numeric values, such as <code>2000</code> or <code>0.7</code>.</li><li><strong>Text:</strong> A string value, without surrounding quotes.</li><li><strong>Boolean:</strong> Choose <code>true</code> or <code>false</code>.</li><li><strong>JSON:</strong> Structured values, such as an array or object.</li></ul>
+                                    <p>Use parameters supported by your selected provider and model. Remove all rows to send no extra parameters. Expand <strong>JSON preview</strong> to review the result.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step-content form-group">
+                            <textarea id="custom_params" name="custom_params" hidden>{"max_tokens":2000,"temperature":0.7}</textarea>
+                            <div id="advanced-parameters-root">
+                                <div class="parameters-fallback">
+                                    <label>max_tokens<input type="number" value="2000" disabled></label>
+                                    <label>temperature<input type="number" value="0.7" step="any" disabled></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-step api-key-step">
+                    <div class="step-heading">
+                        <span class="step-number" aria-hidden="true">4</span><h3><label for="api_key">API Key</label></h3>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: API key" aria-describedby="field-help-5">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-5" role="tooltip">
+                                <h3>API key</h3>
+                                <p>Enter an API key for the <strong>selected provider</strong>. The links in the model reference table open each provider's API key page.</p>
+                                <p>Use the eye button to show or hide the key while editing.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="step-content password-field">
+                        <input type="password" id="api_key" placeholder="Enter your API key" autocomplete="off" spellcheck="false">
+                        <button type="button" id="toggle_api_key" class="password-toggle" aria-label="Show API key" aria-pressed="false" aria-controls="api_key"><i class="far fa-eye" aria-hidden="true"></i></button>
+                    </div>
+                </div>
             </div>
-            <div id="custom_model_config" class="custom-model-panel">
-                <div class="model-reference">
-                    <h3 id="model-reference-title">Common model URLs and model names</h3>
-                    <div class="reference-table-scroll" tabindex="0" role="region" aria-labelledby="model-reference-title">
-                        <table class="model-reference-table">
-                            <thead>
-                                <tr><th scope="col">Provider</th><th scope="col">URL</th><th scope="col">Model name</th><th scope="col">Get an API key</th></tr>
-                            </thead>
+        </section>
+        <section class="settings-section" aria-labelledby="stimulus-design-title">
+            <div class="section-heading">
+                <span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="m15 17 1 1 3-3"/></svg></span>
+                <div><h2 id="stimulus-design-title">Stimulus Design</h2>
+                    <p>Provide example items and describe what you want to generate.</p></div>
+            </div>
+            <div class="pale-blue-section">
+                <div class="form-group custom-example-group">
+                    <div class="label-container">
+                        <label><span class="field-icon" aria-hidden="true"><i class="fas fa-list-ul"></i></span><strong>Example stimuli</strong></label>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: Example stimuli" aria-describedby="field-help-6">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-6" role="tooltip">
+                                <h3>Example stimuli</h3>
+                                <p>Each item is a complete example of the stimulus you want to generate.</p>
+                                <ul>
+                                <li><strong>Components:</strong> Name each part of the item.</li>
+                                <li><strong>Content:</strong> Provide the corresponding example content.</li>
+                                <li>Use the same components across all example items.</li>
+                                <li>Put components that must be unique across items <strong>before the components that use them</strong>.</li>
+                                </ul>
+                                <h4>Example</h4>
+                                <div class="tooltip-table-scroll"><table>
+                                <thead>
+                                <tr>
+                                  <th>Components</th>
+                                  <th>Content</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                  <td>Verb</td>
+                                  <td>eat</td>
+                                </tr>
+                                <tr>
+                                  <td>Name</td>
+                                  <td>Alice</td>
+                                </tr>
+                                <tr>
+                                  <td>Active</td>
+                                  <td>Alice eats an apple.</td>
+                                </tr>
+                                <tr>
+                                  <td>Passive</td>
+                                  <td>An apple is eaten by Alice.</td>
+                                </tr>
+                                </tbody>
+                                </table></div>
+                                <p>Use <strong>Add component</strong> to add a row to every item and <strong>Add item</strong> to add another complete example. Provide <strong>2–3 full examples</strong> to help the agent learn.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="description-text">Add multiple example items to help the agent learn.</p>
+                    <div class="component-tip" role="note">
+                        <p><strong>Avoid repeats:</strong> Put elements that must be unique across stimulus items (e.g., verbs or names) in separate components, and list these components before those that use them.</p>
+                        <p><strong>Example:</strong> Each item uses a unique verb and name to generate sentences in two conditions: active and passive voice.</p>
+                        <table class="component-example-table" aria-label="Example components for active and passive conditions">
+                            <thead><tr><th scope="col">Components</th><th scope="col">Content</th></tr></thead>
                             <tbody>
-                                <tr>
-                                    <td><strong>DeepSeek</strong></td>
-                                    <td><code>https://api.deepseek.com/chat/completions</code></td>
-                                    <td><code>deepseek-chat</code></td>
-                                    <td><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek API keys</a></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>OpenRouter</strong></td>
-                                    <td><code>https://openrouter.ai/api/v1/chat/completions</code></td>
-                                    <td><code>openai/gpt-5.4</code></td>
-                                    <td><a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">OpenRouter API keys</a></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>OpenAI</strong></td>
-                                    <td><code>https://api.openai.com/v1/chat/completions</code></td>
-                                    <td><code>gpt-5.4</code></td>
-                                    <td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI API keys</a></td>
-                                </tr>
+                                <tr><th scope="row">Verb</th><td>eat</td></tr>
+                                <tr><th scope="row">Name</th><td>Alice</td></tr>
+                                <tr><th scope="row">Active</th><td>Alice eats an apple.</td></tr>
+                                <tr><th scope="row">Passive</th><td>An apple is eaten by Alice.</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <p class="model-reference-note">Example model IDs; check your provider's current model availability.</p>
+
+                    <!-- Example table container -->
+                    <div id="items-container">
+                        <!-- Item 1 -->
+                        <div class="item-container" id="item-1">
+                            <div class="item-title">Item 1</div>
+                            <table class="stimuli-table">
+                                <thead>
+                                    <tr>
+                                        <th class="type-column">Components</th>
+                                        <th class="content-column">Content</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="type-column"><input type="text" aria-label="Component"></td>
+                                        <td class="content-column"><input type="text" aria-label="Content">
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="item-buttons-row example-buttons">
+                                <div class="left-buttons">
+                                    <button class="add-component-btn">Add component</button>
+                                    <button class="delete-component-btn">Delete component</button>
+                                </div>
+                                <div class="right-buttons">
+                                    <button class="add-item-btn">Add item</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <div class="label-container">
-                        <label for="custom_model_name">Model name</label>
-                        <div class="tooltip info-icon">
-                            <span class="info-icon-inner">i</span>
-                            <span class="tooltip-text">Enter the name of your custom model (e.g.,
-                                deepseek-chat)</span>
+                        <label for="experiment_design"><span class="field-icon" aria-hidden="true"><i class="fas fa-pen"></i></span>Stimulus design</label>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: Stimulus design" aria-describedby="field-help-7">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-7" role="tooltip">
+                                <h3>Stimulus design</h3>
+                                <p>Describe the research question, the structure of each stimulus item, and the requirements for each experimental condition.</p>
+                                <p>Include:</p>
+                                <ul>
+                                <li><strong>Components:</strong> What each item should contain.</li>
+                                <li><strong>Conditions:</strong> How the content should differ across conditions.</li>
+                                <li><strong>Constraints:</strong> What to include, what to avoid, and which components must be unique across items.</li>
+                                <li><strong>Controls:</strong> Which properties should be matched across conditions, such as length or complexity.</li>
+                                </ul>
+                                <p>Replace the bracketed fields in the default template with your experiment's details.</p>
+                                <h4>Example</h4>
+                                <p>Generate an active sentence and a passive sentence for each verb and name. Keep the verb and name unique across items, and match the two conditions for meaning and plausibility.</p>
+                            </div>
                         </div>
                     </div>
-                    <input type="text" id="custom_model_name" name="custom_model_name"
-                        placeholder="e.g., deepseek-chat">
-                </div>
-                <div class="form-group">
-                    <div class="label-container">
-                        <label for="custom_api_url">API URL</label>
-                        <div class="tooltip info-icon">
-                            <span class="info-icon-inner">i</span>
-                            <span class="tooltip-text">Enter the API endpoint URL for your custom model</span>
-                        </div>
+                    <textarea id="experiment_design" rows="16">We are designing stimuli for an experiment investigating [research question].
+
+Each stimulus item should [describe what the stimuli should contain].
+
+The experiment includes [number] conditions:
+
+- [Condition 1]: [Describe the requirements for this condition.]
+- [Condition 2]: [Describe the requirements for this condition.]
+
+All stimuli should meet the following requirements:
+
+- [Specify what the stimuli must include.]
+- [Specify what should be avoided.]
+- [Specify any additional requirements.]
+
+Stimuli across conditions should be matched for [properties to control, e.g., length or complexity].</textarea>
+                    <!-- 添加"AutoGenerate properties"按钮 -->
+                    <div class="button-container-spaced">
+                        <button id="auto_generate_button" class="auto-generate-btn"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Auto-generate properties</button>
                     </div>
-                    <input type="text" id="custom_api_url" name="custom_api_url"
-                        placeholder="e.g., https://api.example.com/v1/chat/completions">
-                </div>
-                <div class="form-group">
-                    <div class="label-container">
-                        <label for="custom_params">Custom parameters (JSON)</label>
-                        <div class="tooltip info-icon">
-                            <span class="info-icon-inner">i</span>
-                            <span class="tooltip-text">Enter additional parameters in JSON format (e.g., {"max_tokens":
-                                2000, "temperature": 0.7})</span>
-                        </div>
-                    </div>
-                    <textarea id="custom_params" name="custom_params" rows="4">{"max_tokens": 2000, "temperature": 0.7}</textarea>
                 </div>
             </div>
-            <div class="form-group api-key-group">
-                <div class="label-container">
-                    <label for="api_key">API key</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">Enter your API key for the selected model.</span>
-                    </div>
-                </div>
-                <input type="text" id="api_key" placeholder="Enter your API Key">
+        </section>
+        <section class="settings-section" aria-labelledby="agent-settings-title">
+            <div class="section-heading">
+                <span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5.5" r="2.5"/><circle cx="5.5" cy="18" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/><path d="m10.8 7.8-4.1 7.9m6.5-7.9 4.1 7.9M8 18h8"/></svg></span>
+                <div><h2 id="agent-settings-title">Agent Property Settings</h2>
+                    <p>Set the criteria for validation and the dimensions for scoring.</p></div>
             </div>
-            <div class="spacing"></div>
-            <div class="form-group custom-example-group">
-                <div class="label-container">
-                    <label>Example stimuli</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">
-                            <strong>### What is this section for?</strong><br>
-                            This section provides <strong>example stimulus items</strong> for the Generator agent to
-                            learn from.<br>
-                            - The <strong>left column</strong> (Component) should match the component names you've
-                            defined above (e.g. <em>word pair</em>, <em>supportive context</em>, <em>neutral
-                                context</em>).<br>
-                            - The <strong>right column</strong> (Content) provides the actual example content for that
-                            component.<br>
-                            💡 Each row defines <strong>one component</strong> of the current item.<br>
-                            Click <strong>"Add item"</strong> to create a new example stimulus item with the same
-                            components.<br>
-                            ---<br>
-                            <strong>### Example:</strong><br>
-                            <strong>Item 1:</strong><br>
-                            - Component: <code>word pair</code> → Content: <code>TV / television</code><br>
-                            - Component: <code>supportive context</code> → Content:
-                            <code>She turned on the TV to watch the news.</code><br>
-                            - Component: <code>neutral context</code> → Content:
-                            <code>The TV was next to the window.</code><br>
-                            <strong>Item 2:</strong><br>
-                            ...<br>
-                            📌 You should add at least <strong>2–3 full example items</strong> for best results.
-                        </span>
+            <div class="pale-blue-section">
+                <div class="form-group agent-settings-card validator-settings">
+                    <div class="label-container">
+                        <label><i class="fas fa-check-circle agent-icon validator-icon"></i> Validator</label>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: Validator" aria-describedby="field-help-8">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-8" role="tooltip">
+                                <h3>Validator</h3>
+                                <p>The Validator checks the <strong>mandatory requirements</strong> that every generated stimulus must meet. An item is accepted only when <strong>all criteria pass</strong>.</p>
+                                <h4>How to configure it</h4>
+                                <ol>
+                                <li>Enter a short criterion name in <strong>Properties</strong>.</li>
+                                <li>Explain the requirement in <strong>Description</strong>.</li>
+                                <li>Write each requirement so that a valid item returns <strong>true</strong>.</li>
+                                </ol>
+                                <h4>Example</h4>
+                                <div class="tooltip-table-scroll"><table>
+                                <thead>
+                                <tr>
+                                  <th>Properties</th>
+                                  <th>Description</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                  <td>SameMeaning</td>
+                                  <td>The active and passive sentences convey the same meaning.</td>
+                                </tr>
+                                <tr>
+                                  <td>ContainsName</td>
+                                  <td>Both sentences contain the specified name.</td>
+                                </tr>
+                                </tbody>
+                                </table></div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <p class="description-text">Add multiple example items to help the agent learn.</p>
-                <div class="component-tip" role="note">
-                    <p><strong>Avoid repeats:</strong> Put elements that must be unique across items (e.g., verbs or names)
-                        in separate components, with the unique component first.</p>
-                    <p><strong>Example:</strong> If the verb must be unique across sentences, enter:</p>
-                    <table class="component-example-table" aria-label="Example of a separate unique verb component">
-                        <thead><tr><th scope="col">Components</th><th scope="col">Content</th></tr></thead>
+                    <p class="description-text">Define the property name (left) and its validation logic (right). Help the
+                        Validator agent to filter out unacceptable items.</p>
+                    <div class="editable-table-scroll" tabindex="0" role="region" aria-label="Validator properties">
+                    <table id="agent2PropertiesTable">
+                        <thead>
+                            <tr>
+                                <th class="agent_2_properties-column">Properties</th>
+                                <th>Description</th>
+                                <th style="width: 70px;">Action</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            <tr><th scope="row">Verb</th><td>eat</td></tr>
-                            <tr><th scope="row">Sentence</th><td>Alice eats an apple</td></tr>
+                            <tr>
+                                <td class="agent_2_properties-column"><input type="text" placeholder="e.g. Synonym"></td>
+                                <td class="agent_2_description-column"><input type="text"
+                                        placeholder="e.g. Whether the words in the word pair are synonyms."></td>
+                                <td><button class="delete-row-btn delete-btn">Delete</button></td>
+                            </tr>
                         </tbody>
                     </table>
-                </div>
-
-                <!-- Example table container -->
-                <div id="items-container">
-                    <!-- Item 1 -->
-                    <div class="item-container" id="item-1">
-                        <div class="item-title">Item 1</div>
-                        <table class="stimuli-table">
-                            <thead>
-                                <tr>
-                                    <th class="type-column">Components</th>
-                                    <th class="content-column">Content</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="type-column"><input type="text" placeholder="e.g. word pair"></td>
-                                    <td class="content-column"><input type="text" placeholder="e.g. math/mathematics">
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div class="item-buttons-row example-buttons">
-                            <div class="left-buttons">
-                                <button class="add-component-btn">Add component</button>
-                                <button class="delete-component-btn">Delete component</button>
-                            </div>
-                            <div class="right-buttons">
-                                <button class="add-item-btn">Add item</button>
+                    </div>
+                    <div class="button-container-spaced">
+                        <button id="add_agent_2_property_button">Add Validator's property</button>
+                    </div>
+                    <div class="form-group criteria-option">
+                        <div class="label-container">
+                            <label>
+                                <input type="checkbox" id="agent2_individual_validation">
+                                Individual Criteria Validation
+                            </label>
+                            <div class="tooltip info-icon" tabindex="0" aria-label="Help: Individual Criteria Validation" aria-describedby="field-help-9">
+                                <span class="info-icon-inner" aria-hidden="true">i</span>
+                                <div class="tooltip-text markdown-content" id="field-help-9" role="tooltip">
+                                    <h3>Individual criteria validation</h3>
+                                    <p>When enabled:</p>
+                                    <ul>
+                                    <li>The Validator checks each criterion in a separate API call.</li>
+                                    <li>Validation stops as soon as a criterion fails.</li>
+                                    <li>More focused checks may require additional API calls and processing time.</li>
+                                    </ul>
+                                    <p>When disabled, all criteria are checked together.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <div class="label-container">
-                    <label for="experiment_design">Stimulus design</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">
-                            <strong>### What is "Stimulus design"?</strong><br>
-                            This field defines the structure and logic of your experimental stimuli.<br>
-                            It helps the model understand what to generate and how to vary conditions.<br>
-                            ---<br>
-                            <strong>### What to include:</strong><br>
-                            ✅ Components<br>
-                            List the elements in each item (e.g. word pair, context sentence, target word)<br>
-                            ✅ Condition manipulation<br>
-                            Describe how the stimuli differ across conditions (e.g. supportive vs neutral)<br>
-                            ✅ Constraints (optional)<br>
-                            Mention any control rules (e.g. sentence length matching)<br>
-                            ---<br>
-                            <strong>### Example:</strong><br>
-                            - A word pair: a short word and its long form (e.g. TV – television)<br>
-                            - Two context sentences:<br>
-                            - Supportive context: strongly predicts the target word (e.g. She watches her favorite shows
-                            on the <strong>TV</strong>.)<br>
-                            - Neutral context: does not predict the target word (e.g. She placed the ball next to the
-                            <strong>TV</strong>)<br>
-                            Supportive and neutral contexts are matched for sentence length and structure.
-                        </span>
-                    </div>
-                </div>
-                <textarea id="experiment_design" placeholder="Describe the structure of each stimulus item:
-- Component 1: ...
-- Component 2: ...
-- Manipulation: ...
-💡 Click the info icon (ℹ️) to see a complete example."></textarea>
-                <!-- 添加"AutoGenerate properties"按钮 -->
-                <div class="button-container-spaced">
-                    <button id="auto_generate_button" class="auto-generate-btn">AutoGenerate properties</button>
-                </div>
-                <!-- 重启提醒文本 -->
-                <div class="restart-notice">* To ensure the server operates normally, the app will auto-restart periodically.</div>
-                <div class="restart-notice">* A countdown will appear in the top-left corner of this page twenty minutes prior to each restart.</div>
-            </div>
-        </div>
-        <h2>Agent Property Settings</h2>
-        <div class="pale-blue-section">
-            <div class="form-group">
-                <div class="label-container">
-                    <label><i class="fas fa-check-circle agent-icon validator-icon"></i> Validator</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">
-                            <strong>### What is a Validator?</strong><br>
-                            Validators define the <strong>mandatory requirements</strong> that each generated stimulus
-                            must meet.<br>
-                            ---<br>
-                            <strong>### How to use:</strong><br>
-                            - In the <strong>Properties</strong> column, define a short label (e.g.
-                            <code>IsSynonym</code>, <code>ContainsTargetWord</code>)<br>
-                            - In the <strong>Description</strong>, explain what this constraint means<br>
-                            ---<br>
-                            <strong>### Example:</strong><br>
-                            IsSynonym: Whether the two words in the word pair are synonyms<br>
-                            Predictability: Whether the supportive context can predict target word
-                        </span>
-                    </div>
-                </div>
-                <p class="description-text">Define the property name (left) and its validation logic (right). Help the
-                    Validator agent to filter out unacceptable items.</p>
-                <table id="agent2PropertiesTable">
-                    <thead>
-                        <tr>
-                            <th class="agent_2_properties-column">Properties</th>
-                            <th>Description</th>
-                            <th style="width: 70px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="agent_2_properties-column"><input type="text" placeholder="e.g. Synonym"></td>
-                            <td class="agent_2_description-column"><input type="text"
-                                    placeholder="e.g. Whether the words in the word pair are synonyms."></td>
-                            <td><button class="delete-row-btn delete-btn">Delete</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="button-container-spaced">
-                    <button id="add_agent_2_property_button">Add Validator's property</button>
-                </div>
-                <div class="form-group" style="margin-top: 15px;">
+                <div class="form-group agent-settings-card scorer-settings">
                     <div class="label-container">
-                        <label>
-                            <input type="checkbox" id="agent2_individual_validation" style="margin-right: 8px;">
-                            Individual Criteria Validation
-                        </label>
-                        <div class="tooltip info-icon">
-                            <span class="info-icon-inner">i</span>
-                            <span class="tooltip-text">
-                                <strong>When this option is enabled:</strong><br>
-                                • Agent 2 (Validator) will validate each criterion individually instead of all at once<br>
-                                • Validation stops immediately when any criterion fails (early rejection)<br>
-                                • May provide more precise validation but increases the number of API calls and processing time
-                            </span>
+                        <label><i class="fas fa-star agent-icon scorer-icon"></i> Scorer</label>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: Scorer" aria-describedby="field-help-10">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-10" role="tooltip">
+                                <h3>Scorer</h3>
+                                <p>The Scorer assigns <strong>numeric ratings</strong> to each generated item so that you can compare, filter, or rank results.</p>
+                                <p>Define:</p>
+                                <ul>
+                                <li><strong>Aspects:</strong> The dimension to evaluate.</li>
+                                <li><strong>Description:</strong> What the rating measures.</li>
+                                <li><strong>Min score / Max score:</strong> The allowed scoring range.</li>
+                                </ul>
+                                <h4>Example</h4>
+                                <div class="tooltip-table-scroll"><table>
+                                <thead>
+                                <tr>
+                                  <th>Aspects</th>
+                                  <th>Description</th>
+                                  <th>Min score</th>
+                                  <th>Max score</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                  <td>Fluency</td>
+                                  <td>How natural and grammatical the sentences are.</td>
+                                  <td>0</td>
+                                  <td>10</td>
+                                </tr>
+                                <tr>
+                                  <td>Plausibility</td>
+                                  <td>How realistic the described events are.</td>
+                                  <td>0</td>
+                                  <td>10</td>
+                                </tr>
+                                </tbody>
+                                </table></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="description-text">Define the dimensions along which the generated items will be rated.</p>
+                    <div class="editable-table-scroll" tabindex="0" role="region" aria-label="Scorer aspects">
+                    <table id="agent3PropertiesTable">
+                        <thead>
+                            <tr>
+                                <th class="agent_3_properties-column">Aspects</th>
+                                <th class="agent_3_description-column">Description</th>
+                                <th class="agent_3_minimum-column">Min score</th>
+                                <th class="agent_3_maximum-column">Max score</th>
+                                <th style="width: 70px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="agent_3_properties-column"><input type="text"
+                                        placeholder="e.g. Word Pair Frequency"></td>
+                                <td class="agent_3_description-column"><input type="text"
+                                        placeholder="e.g. How frequent the word pair are used in English"></td>
+                                <td class="agent_3_minimum-column"><input type="number" min="0" placeholder="e.g. 0"></td>
+                                <td class="agent_3_maximum-column"><input type="number" min="0" placeholder="e.g. 10"></td>
+                                <td><button class="delete-row-btn delete-btn">Delete</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="button-container-spaced">
+                        <button id="add_agent_3_property_button">Add Scorer's aspect</button>
+                    </div>
+                    <div class="form-group criteria-option">
+                        <div class="label-container">
+                            <label>
+                                <input type="checkbox" id="agent3_individual_scoring">
+                                Individual Aspect Scoring
+                            </label>
+                            <div class="tooltip info-icon" tabindex="0" aria-label="Help: Individual Aspect Scoring" aria-describedby="field-help-11">
+                                <span class="info-icon-inner" aria-hidden="true">i</span>
+                                <div class="tooltip-text markdown-content" id="field-help-11" role="tooltip">
+                                    <h3>Individual aspect scoring</h3>
+                                    <p>When enabled, the Scorer evaluates each aspect in a <strong>separate API call</strong>. This provides a more focused evaluation, but may increase the number of API calls and processing time.</p>
+                                    <p>When disabled, all aspects are scored together.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="spacing"></div>
-            <div class="form-group">
-                <div class="label-container">
-                    <label><i class="fas fa-star agent-icon scorer-icon"></i> Scorer</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text">
-                            <strong>### What is a Scorer?</strong><br>
-                            Scorers assign <strong>numeric scores</strong> to each generated item based on specific
-                            quality dimensions.<br>
-                            These scores can be used to compare, filter, or rank items.<br>
-                            ---<br>
-                            <strong>### What to define:</strong><br>
-                            - <strong>Aspects</strong>: The dimension you're evaluating (e.g. Fluency, Frequency,
-                            Informativeness)<br>
-                            - <strong>Description</strong>: What this score represents<br>
-                            - <strong>Min / Max score</strong>: Define the scoring scale (e.g. from 0 to 10)<br>
-                            ---<br>
-                            <strong>### Example:</strong><br>
-                            | Aspect | Description | Min score | Max score |<br>
-                            |Word Pair Frequency | How frequently the word pair is used in English | 0 | 10 |<br>
-                            | Predictability | How strongly the supportive context predicts the target word | 0 | 100 |
-                        </span>
-                    </div>
-                </div>
-                <p class="description-text">Define the dimensions along which the generated items will be rated.</p>
-                <table id="agent3PropertiesTable">
-                    <thead>
-                        <tr>
-                            <th class="agent_3_properties-column">Aspects</th>
-                            <th class="agent_3_description-column">Description</th>
-                            <th class="agent_3_minimum-column">Min score</th>
-                            <th class="agent_3_maximum-column">Max score</th>
-                            <th style="width: 70px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="agent_3_properties-column"><input type="text"
-                                    placeholder="e.g. Word Pair Frequency"></td>
-                            <td class="agent_3_description-column"><input type="text"
-                                    placeholder="e.g. How frequent the word pair are used in English"></td>
-                            <td class="agent_3_minimum-column"><input type="number" min="0" placeholder="e.g. 0"></td>
-                            <td class="agent_3_maximum-column"><input type="number" min="0" placeholder="e.g. 10"></td>
-                            <td><button class="delete-row-btn delete-btn">Delete</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="button-container-spaced">
-                    <button id="add_agent_3_property_button">Add Scorer's aspect</button>
-                </div>
-                <div class="form-group" style="margin-top: 15px;">
-                    <div class="label-container">
-                        <label>
-                            <input type="checkbox" id="agent3_individual_scoring" style="margin-right: 8px;">
-                            Individual Aspect Scoring
-                        </label>
-                        <div class="tooltip info-icon">
-                            <span class="info-icon-inner">i</span>
-                            <span class="tooltip-text">
-                                <strong>When this option is enabled:</strong><br>
-                                • Agent 3 (Scorer) will score each aspect individually instead of all at once<br>
-                                • Each aspect gets a separate API call for more focused scoring<br>
-                                • May provide more accurate scores but increases the number of API calls and processing time
-                            </span>
+        </section>
+        <section class="settings-section" aria-labelledby="output-title">
+            <div class="section-heading">
+                <span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11m-4-4 4 4 4-4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg></span>
+                <div><h2 id="output-title">Output</h2>
+                    <p>Choose how many items to generate and follow the progress below.</p></div>
+            </div>
+            <div class="pale-blue-section">
+                <div class="output-controls">
+                    <div class="form-group">
+                        <div class="label-container">
+                            <label for="iteration">The number of items</label>
+                            <div class="tooltip info-icon" tabindex="0" aria-label="Help: The number of items" aria-describedby="field-help-12">
+                                <span class="info-icon-inner" aria-hidden="true">i</span>
+                                <div class="tooltip-text markdown-content" id="field-help-12" role="tooltip">
+                                    <h3>Number of items</h3>
+                                    <p>Enter a <strong>positive integer</strong>, such as <code>50</code>.</p>
+                                    <p>Each item is one complete set of the stimulus components you defined, including the content for its experimental conditions.</p>
+                                </div>
+                            </div>
                         </div>
+                        <input type="text" id="iteration" placeholder="e.g. 50">
+                    </div>
+                    <div class="button-container">
+                        <button id="generate_button"><i class="fas fa-play" aria-hidden="true"></i> Generate stimulus</button>
+                        <button id="stop_button" disabled><i class="fas fa-stop" aria-hidden="true"></i> Stop</button>
+                        <button id="clear_button"><i class="fas fa-arrow-rotate-left" aria-hidden="true"></i> Clear all</button>
                     </div>
                 </div>
-            </div>
-        </div>
-        <h2>Output</h2>
-        <div class="pale-blue-section">
-            <div class="form-group">
-                <div class="label-container">
-                    <label for="iteration">The number of items</label>
-                    <div class="tooltip info-icon">
-                        <span class="info-icon-inner">i</span>
-                        <span class="tooltip-text"><strong>Positive integer.</strong><br>Rounds of stimulus generation, corresponding to
-                            the number of constructed sets of stimuli.</span>
-                    </div>
+                <div class="generation-status-container">
+                    <span id="generation_status" class="generation-status" role="status" aria-live="polite"></span>
                 </div>
-                <input type="text" id="iteration" placeholder="e.g. 50">
-            </div>
-            <div class="button-container">
-                <button id="generate_button">Generate stimulus</button>
-                <button id="stop_button" disabled>Stop</button>
-                <button id="clear_button">Clear all</button>
-            </div>
-            <div class="generation-status-container">
-                <span id="generation_status" class="generation-status"></span>
-            </div>
-            <div class="progress-section">
-                <div class="label-container">
-                    <label>Progress bar</label>
-                </div>
-                <div class="progress-container">
-                    <div class="progress-bar" id="progress_bar">
+                <div class="progress-section">
+                    <div class="label-container">
+                        <label id="progress-label">Generation progress</label>
                         <span class="progress-percentage" id="progress_percentage">0%</span>
                     </div>
+                    <div class="progress-container" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="progress-bar" id="progress_bar"></div>
+                    </div>
                 </div>
+                <p class="restart-notice"><i class="fas fa-circle-info" aria-hidden="true"></i><span>The app restarts periodically to keep the server running. A countdown appears in the top-left corner 20 minutes before each restart.</span></p>
             </div>
-        </div>
+        </section>
         <section class="agent-logs-section" aria-labelledby="agent-logs-title">
             <div class="agent-logs-toolbar">
-                <div class="agent-logs-heading"><span class="logs-terminal" aria-hidden="true">›_</span><div>
+                <div class="agent-logs-heading"><span class="logs-terminal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></span><div>
                     <h2 id="agent-logs-title">Agent Logs</h2>
                     <p>Real-time activity of the multi-agent stimulus generation process.</p>
                 </div></div>
@@ -454,8 +580,9 @@
                 </div>
             </div>
         </section>
-    </div>
+    </main>
     <script src="/static/script.js"></script>
+    <script type="module" src="/static/ui-react.js"></script>
 </body>
 
 </html>
