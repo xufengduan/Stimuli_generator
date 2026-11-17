@@ -1,629 +1,510 @@
-# 🧠 Stimulus Generator
+# StimMAS
 
-<div align="center">
+**Multi-agent AI for psychological stimulus generation.**
 
-![Version](https://img.shields.io/badge/Version-1.0.0-blue)
-![License](https://img.shields.io/badge/License-Apache%202.0-green)
-![Python Version](https://img.shields.io/badge/Python-3.8+-yellow)
-[![Documentation](https://img.shields.io/badge/Documentation-Latest-brightgreen)](https://github.com/xufengduan/Stimuli_generator)
+[Open StimMAS](https://huggingface.co/spaces/CUHKLPL/stimuli_generator) · [中文上手指南](#中文上手指南) · [Report an issue](https://github.com/xufengduan/Stimuli_generator/issues)
 
-</div>
+StimMAS helps psychology researchers create experimental materials from a written study design and a few examples. Describe what you need, show the tool what one complete stimulus item looks like, and download the generated items as a CSV file for review.
 
-<p align="center">
-  <b>A Large Language Model-based Stimulus Material Generation Tool for Psycholinguistic Research</b>
-</p>
+**New to AI tools? Start with the online app and OpenRouter.** You can follow the complete example below without writing code or installing software. OpenRouter lets you access models from different developers through one account, one API key, and the same API URL. See the [OpenRouter quickstart](https://openrouter.ai/docs/quickstart).
 
-<div align="center">
-  <a href="#english">English</a> | <a href="#chinese" onclick="document.getElementById('chinese-content').open = true;">中文</a>
-</div>
+![StimMAS interface: model selection and provider reference](docs/images/stimmas-model-setup.jpg)
 
----
+## Contents
 
-<a id="english"></a>
-## 📖 Project Introduction
+- [What the three agents do](#what-the-three-agents-do)
+- [Step 1: Set up OpenRouter — recommended](#step-1-openrouter)
+- [Step 2: Enter example stimuli](#step-2-examples)
+- [Step 3: Describe your stimulus design](#step-3-design)
+- [Step 4: Set validation and scoring](#step-4-agents)
+- [Step 5: Generate and download](#step-5-output)
+- [Use another model or provider](#other-models)
+- [Frequently asked questions](#faq)
+- [中文上手指南](#中文上手指南)
+- [Run locally or develop the app](#local-development)
 
-Stimulus Generator is a tool based on large language models designed specifically for psycholinguistic research to generate stimulus materials. It can automatically generate experimental stimulus materials that meet requirements based on the experimental design and examples defined by researchers. This tool adopts a multi-agent architecture, including Generator, Validator, and Scorer, to ensure that the generated stimulus materials meet experimental requirements and are of high quality.
+## What the three agents do
 
-## ✨ Main Features
+| Agent | What it does | What you provide |
+| --- | --- | --- |
+| **Generator** | Proposes a new stimulus item. | Example items and your study requirements. |
+| **Validator** | Checks mandatory requirements; rejected items are regenerated. | Criteria that should all be true for an acceptable item. |
+| **Scorer** | Rates accepted items on dimensions you choose. | Rating descriptions and minimum/maximum scores. |
 
-- **🤖 Multi-agent Architecture**:
-  - **Generator**: Generates stimulus materials based on experimental design
-  - **Validator**: Verifies whether the generated materials meet experimental requirements
-  - **Scorer**: Scores materials in multiple dimensions
+These are three roles using the model you select. You only need one model configuration and one API key. Their checks and ratings help you screen materials; you should still review and pilot the materials before using them in a study.
 
-- **🔄 Flexible Model Selection**:
-  - Supports OpenAI GPT-4o (requires OpenAI API Key)
-  - Supports Custom Models via OpenAI-compatible APIs (e.g., DeepSeek, Qwen, Meta Llama, Mistral, etc.)
+<a id="step-1-openrouter"></a>
+## Step 1: Set up OpenRouter — recommended
 
-- **📊 Real-time Progress Monitoring**:
-  - WebSocket real-time updates of generation progress
-  - Detailed log information display
-  - Generation process can be stopped at any time
+### 1. Create an account and get an API key
 
-- **🎨 User-friendly Interface**:
-  - Intuitive form design
-  - Real-time validation and feedback
-  - Responsive layout design
-  - Detailed help information
+1. Open [OpenRouter](https://openrouter.ai/) and sign up or sign in.
+2. Open the [API Keys page](https://openrouter.ai/settings/keys), create a key, and copy it. You can give it a recognizable name such as `StimMAS`.
+3. For a paid model, add credits to your OpenRouter account through its account/billing settings. Check the model's listed prices before running a large batch. Free models can have stricter limits; see the [OpenRouter FAQ](https://openrouter.ai/docs/faq).
+4. Open the [StimMAS online app](https://huggingface.co/spaces/CUHKLPL/stimuli_generator).
 
-## 💻 System Requirements
+An **API key** is a private access code that lets StimMAS send requests using your model account. Paste the key itself, without quotation marks or the word `Bearer`. Keep it out of screenshots and shared documents. If a key is exposed, revoke it on the provider's key page and create a replacement.
 
-| Requirement | Details |
-|-------------|---------|
-| Python | 3.8 or higher |
-| Browser | Modern web browser (Chrome, Firefox, Safari, etc.) |
-| Network | Stable network connection |
-| Socket.IO | Client version 4.x (compatible with server side) |
+### 2. Fill in Parameter Settings
 
-## 🚀 Installation Instructions
+For the first run, use the existing OpenRouter preset:
 
-### Clone directly from GitHub repository
+| On the StimMAS page | What to select or enter |
+| --- | --- |
+| **Model** | Keep **Predefined Models** selected. |
+| **Model Configuration → Model name** | Select **openai/gpt-5.4 (OpenRouter)** from the dropdown. |
+| **API URL** | Filled automatically: `https://openrouter.ai/api/v1/chat/completions` |
+| **Advanced Parameters** | Leave the two default rows: `max_tokens` / `Number` / `2000`; `temperature` / `Number` / `0.7`. |
+| **API Key** | Paste the key you just created **on OpenRouter**. The eye button shows or hides it. |
 
-```bash
-# 1. Clone the project code
-git clone https://github.com/xufengduan/Stimuli_generator.git
-cd Stimuli_generator
+The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. An OpenRouter key also works when the selected model was developed by OpenAI; you do not need a separate OpenAI key for this route.
 
-# 2. Create and activate a virtual environment (recommended)
-python -m venv venv
+**What do these unfamiliar terms mean?**
 
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
+| Term | Plain-language meaning | Example for this walkthrough |
+| --- | --- | --- |
+| **Provider** | The service receiving the requests and charging your account. | OpenRouter |
+| **Model name** | The exact identifier of the AI model to use. | `openai/gpt-5.4` |
+| **API URL** | The web address where StimMAS sends requests. It is different from the provider's homepage. | `https://openrouter.ai/api/v1/chat/completions` |
+| **API Key** | Your private access code, obtained from that provider. | Your own OpenRouter key; the text in this guide is not a working key. |
 
-# 3. Install required dependencies
-pip install -e .
+StimMAS uses OpenRouter's [chat completions endpoint](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion). If you need to enter the URL manually, copy the **entire** address above, including `/chat/completions`.
+
+### 3. Leave Advanced Parameters at their defaults for now
+
+You fill in ordinary form rows; StimMAS builds the JSON automatically. There is no need to write JSON for the default settings.
+
+| Parameter | Type | Value | Meaning |
+| --- | --- | --- | --- |
+| `max_tokens` | Number | `2000` | Limits the length of a model response. This is **not** the number of stimulus items. |
+| `temperature` | Number | `0.7` | Controls sampling variability. A lower value generally gives less variable responses; it does not guarantee correctness. |
+
+![Advanced Parameters form with automatic JSON preview](docs/images/stimmas-advanced-parameters.jpg)
+
+To add a setting later, click **Add parameter**. For example, if your chosen model supports it, enter `top_p` / `Number` / `0.9`. Parameter support varies by model, so leave unfamiliar settings alone during your first run.
+
+<details>
+<summary>Optional: parameter types and JSON preview</summary>
+
+| Type | How to enter a value | Example syntax |
+| --- | --- | --- |
+| Number | Enter a number without quotes. | `2000` or `0.7` |
+| Text | Enter text without surrounding quotes. | `hello` |
+| Boolean | Select true or false. | `false` |
+| JSON | Enter a valid structured JSON value. | `["a", "b"]` or `{"enabled": true}` |
+
+The last two columns illustrate value syntax; they are not additional parameters to send to every model. Only add parameter names and values supported by your provider and model. Duplicate names, invalid numbers, and invalid JSON must be corrected before generation can start.
+
+Click **JSON preview** to inspect the generated settings. With the two default rows it shows:
+
+```json
+{
+  "max_tokens": 2000,
+  "temperature": 0.7
+}
 ```
 
-### Frontend animation bundle
+The preview is read-only. Edit the form rows to change it. Remove a row with its trash button; removing every row sends an empty settings object and leaves optional parameters to the provider's defaults.
 
-Flask serves the prebuilt React bundle in `static/ui-react.js`; Node.js is only needed when editing the frontend source. After changing `frontend/ui.jsx`, rebuild it with:
+</details>
+
+<a id="step-2-examples"></a>
+## Step 2: Enter example stimuli
+
+This walkthrough creates English sentences in **active** and **passive** voice. One item contains a verb, a name, and both sentence versions. The goal is to generate **new items following the examples**, rather than run an experiment on participants.
+
+In **Stimulus Design → Example stimuli**:
+
+1. The first item starts with one blank row. Click **Add component** three times to make four rows.
+2. Fill **Item 1** using the table below. Put the label in **Components** and its corresponding text in **Content**.
+3. Click **Add item**, then fill the new **Item 2** with the same component labels. Repeat for **Item 3**.
+
+| Components — use these labels in every item | Content for Item 1 | Content for Item 2 | Content for Item 3 |
+| --- | --- | --- | --- |
+| `Verb` | eat | read | paint |
+| `Name` | Alice | Ben | Clara |
+| `Active` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| `Passive` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+
+**Avoid repeats:** Put elements that must be unique across stimulus items (e.g., verbs or names) in separate components, and list these components before those that use them.
+
+Here, `Verb` and `Name` come before `Active` and `Passive`. The same verb and name should appear in both sentences **within** an item; different items should use different verbs and names. Keep the component labels and their order consistent across all examples. Use distinct labels within each item.
+
+**Add component / Delete component** adds or removes the last component row across all example items. **Add item** creates another complete example with the same number of rows. Fill every cell; delete unwanted rows or items instead of leaving them blank.
+
+![Example stimuli and the editable stimulus design template](docs/images/stimmas-stimulus-design.jpg)
+
+<a id="step-3-design"></a>
+## Step 3: Describe your stimulus design
+
+The **Stimulus design** box starts with an editable template. Replace the bracketed prompts with your study requirements, or replace the entire box with this complete example:
+
+```text
+We are designing stimuli for an experiment investigating how active and passive voice affect sentence comprehension in adult English speakers.
+
+Each stimulus item should contain four components in this order: Verb, Name, Active, and Passive.
+
+The experiment includes two conditions:
+
+- Active: A simple English sentence in the present tense, with the named person as the agent.
+- Passive: A passive-voice version of the same sentence, using a by-phrase that names the same agent.
+
+All stimuli should meet the following requirements:
+
+- Use the same verb, name, and object in both sentences within an item.
+- Give every new item a verb and a name that have not appeared in the examples or earlier generated items.
+- Use common transitive verbs, familiar objects, and plausible everyday events.
+- Use a singular subject and grammatically correct present-tense verb forms.
+- Avoid idioms, ambiguous pronouns, and emotionally disturbing content.
+- Keep the component labels exactly as Verb, Name, Active, and Passive.
+
+Stimuli across conditions should be matched for meaning, vocabulary, and event plausibility. Allow the grammatical changes required to form the passive voice; the passive sentence need not have the same word count as the active sentence.
+```
+
+For your own study, specify the language, participant group, conditions, required content, exclusions, and properties to control. Only require matching that is compatible with your manipulation. For instance, active and passive sentences naturally differ in grammatical form and often in length.
+
+<a id="step-4-agents"></a>
+## Step 4: Set validation and scoring
+
+### Validator: requirements that every item must pass
+
+Under **Agent Property Settings → Validator**, fill the first row and click **Add Validator's property** for additional rows. These examples can be copied directly:
+
+| Properties | Description |
+| --- | --- |
+| `SameMeaning` | The active and passive sentences describe the same event with the same agent and object. |
+| `CorrectVoice` | Active is in active voice. Passive is in passive voice and contains a by-phrase naming the agent. |
+| `SameVerbAndName` | Both sentences use the verb specified in Verb, with the appropriate inflection, and the name specified in Name. |
+| `Grammatical` | Both sentences are grammatical English sentences in the present tense. |
+
+Write each criterion so that **true means acceptable**. For example, use “The sentences contain no idioms,” rather than “The sentences contain idioms.” All criteria must pass for an item to be accepted.
+
+### Scorer: dimensions for comparing accepted items
+
+Under **Scorer**, fill all four columns. Click **Add Scorer's aspect** to add the second row:
+
+| Aspects | Description | Min score | Max score |
+| --- | --- | --- | --- |
+| `Fluency` | Rate how natural and easy to read both sentences are. 0 = very unnatural; 10 = fully natural. Use the lower rating if the two sentences differ. | `0` | `10` |
+| `Plausibility` | Rate how plausible the described event is in everyday life. 0 = highly implausible; 10 = highly plausible. | `0` | `10` |
+
+Scores must have non-negative integer bounds, and the maximum must exceed the minimum. Explain the direction and endpoints in the description. A score does not have to use a 0–10 scale, and a low score does not automatically reject an item: use the Validator for mandatory requirements.
+
+**Want help drafting these tables?** After entering your examples, design, and model settings, click **Auto-generate properties**. This calls the selected model and fills the Validator and Scorer tables. Review and edit the suggestions before generating stimuli; this step also uses your API account.
+
+For a first run, leave **Individual Criteria Validation** and **Individual Aspect Scoring** unchecked. When enabled, these options use a separate model call for each criterion or aspect, increasing the number of calls and potentially the running time and cost.
+
+<a id="step-5-output"></a>
+## Step 5: Generate and download
+
+1. Under **Output → The number of items**, enter `5` for a small first run.
+2. Click **Generate stimulus** and keep the page open while it runs.
+3. Follow the progress and the **Generator**, **Validator**, and **Scorer** panels in **Agent Logs**. Rejected proposals may be regenerated before an item is accepted.
+4. When the run finishes, the app initiates a **CSV download**. Check your browser's downloads folder and open the file in Excel, R, SPSS, or another analysis tool.
+
+In this example, **5 items means 5 active/passive pairs: 10 sentences in total**, plus each item's Verb and Name components. The supplied examples show the desired format and are not the five new items you requested.
+
+Each item can involve several model calls for generation, validation, scoring, and retries. Start with a small batch and check your provider's usage before generating a full stimulus set.
+
+| Control | How to use it |
+| --- | --- |
+| **Stop** | Requests a stop. An in-flight model request may need to finish; completed items are saved for a partial download if available. |
+| **Clear all** | Resets the form, examples, agent settings, API key, and logs. Restores the design template, default advanced parameters, and **DeepSeek** preset. Reselect OpenRouter if you use it. |
+| **Agent Logs filters** | Focus on outputs, warnings/retries, or errors. Use the item selector to inspect a particular item. |
+| **Raw logs** | Shows the underlying log text when you need more detail. |
+
+### What is in the CSV?
+
+Each row is one generated item. Component labels and values are expanded into paired columns. For the four-component example, you would expect `Key1` / `Content1` through `Key4` / `Content4`:
+
+| Example column | Meaning | Illustrative value |
+| --- | --- | --- |
+| `stimulus_id` | Generated item number. | `1` |
+| `Key1` / `Content1` | First component label and value. | `Verb` / `wash` |
+| `Key2` / `Content2` | Second component label and value. | `Name` / `David` |
+| `Key3` / `Content3` | Third component label and value. | `Active` / `David washes a cup.` |
+| `Key4` / `Content4` | Fourth component label and value. | `Passive` / `A cup is washed by David.` |
+| `Fluency`, `Plausibility` | Model ratings for the aspects you defined. | Numeric values within your configured ranges. |
+| `validation_fails`, `repetition_count` | Diagnostic counts from attempts to obtain the item. | Non-negative integers. |
+| `scoring_error`, when present | A rating could not be obtained or did not meet the expected format. | Inspect the affected item and missing ratings. |
+
+Missing ratings are not automatically replaced with zero. Review missing values as well as the texts. Download and keep the CSV; the running app is not permanent storage. For reproducibility, also save your design, examples, criteria, rating scales, model ID, parameter settings, and date. Do not include your API key in that record.
+
+<a id="other-models"></a>
+## Use another model or provider
+
+### Find a different model on OpenRouter
+
+**We recommend OpenRouter for trying and comparing models:** you can keep the same API URL and OpenRouter key while changing the model ID. Browse the [model catalog with text input and output filters](https://openrouter.ai/models?input_modalities=text&output_modalities=text).
+
+1. Open a model's page and copy its exact identifier. For example, the [GPT-5.4 page](https://openrouter.ai/openai/gpt-5.4) uses `openai/gpt-5.4`. Copy the identifier, rather than the display title “OpenAI: GPT-5.4”.
+2. In StimMAS, click **Custom Model**. **This clears the preset model name and API URL.** Fill in both fields again.
+3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `openai/`.
+4. Paste `https://openrouter.ai/api/v1/chat/completions` in **API URL** and use your **OpenRouter** key in **API Key**.
+5. Check the model's price, availability, and supported parameters, then run a small pilot. StimMAS needs text responses in the requested JSON format; models can differ in how reliably they follow that format.
+
+For example, a fully filled custom configuration for the model used in the tutorial is:
+
+```text
+Model:       Custom Model
+Model name:  openai/gpt-5.4
+API URL:     https://openrouter.ai/api/v1/chat/completions
+API Key:     paste your own OpenRouter key here
+```
+
+### Common model names and URLs
+
+OpenRouter is the recommended starting point; direct DeepSeek and OpenAI access are alternatives if you already use those services. The URLs below are complete chat completions endpoints.
+
+| Provider | Example Model name | Complete API URL | Where to get the matching key |
+| --- | --- | --- | --- |
+| **OpenRouter — recommended** | `openai/gpt-5.4` | `https://openrouter.ai/api/v1/chat/completions` | [OpenRouter API keys](https://openrouter.ai/settings/keys) |
+| DeepSeek | `deepseek-flash` | `https://api.deepseek.com/chat/completions` | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
+| OpenAI | `gpt-5.4` | `https://api.openai.com/v1/chat/completions` | [OpenAI API keys](https://platform.openai.com/api-keys) |
+
+For the listed OpenRouter and OpenAI presets, choose the corresponding option under **Predefined Models** and paste that provider's key. The app's DeepSeek preset currently displays `deepseek-chat`; the [current DeepSeek quickstart](https://api-docs.deepseek.com/) uses `deepseek-flash`. To use the DeepSeek example above, select **Custom Model** and copy its model name and full URL from the table.
+
+For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatible chat completions endpoint; local/private endpoints and redirects are not supported. Model IDs and availability depend on the provider.
+
+<a id="faq"></a>
+## Frequently asked questions
+
+| Question or problem | What to do |
+| --- | --- |
+| **Do I need to know Python, React, or JSON?** | No. Use the online app and the default parameter form. Local installation is optional. |
+| **Can I use my ChatGPT login or subscription as the API key?** | Paste a key created on the selected API provider's key page. A chat account password or subscription is not an API key. |
+| **The model name or API URL is blank.** | Switching to Custom Model clears both. Refill both fields, or switch to Predefined Models and select the OpenRouter preset. |
+| **401 / invalid API key** | Check for extra spaces and confirm the key belongs to the selected provider. Use an OpenRouter key with the OpenRouter URL. |
+| **402 / insufficient credits** | Check your provider's balance and any key spending limit. |
+| **404 / model not found** | Check the full model ID and API URL. On OpenRouter, include the prefix, e.g., `openai/gpt-5.4`. |
+| **429 / rate limit** | Check the provider's rate limits and retry later. Free models may have tighter limits. |
+| **Unsupported parameter / 400** | Check which parameter the provider rejects. Remove that row from Advanced Parameters and try a small run again. |
+| **Invalid JSON or incomplete model response** | Try increasing `max_tokens`, simplifying the design, or choosing a model that follows structured-output instructions more reliably. |
+| **Repeated validation failures** | Inspect Validator logs. Check for contradictory design requirements or criteria that an acceptable item would fail. |
+| **The app seems slow.** | Multiple checks and retries can take time. Inspect the logs and provider status. Stop and wait for any partial results before retrying. |
+| **No CSV appeared.** | Check browser download permissions and downloads. If no items finished before stopping, there may be no partial file. |
+| **The online app is starting or reconnecting.** | Wait for the Space to start. If a connection fails, check your network; save any downloaded results before refreshing. |
+| **Can AI ratings replace human norming?** | Treat them as screening information. Independently verify relevant properties, review the materials, and pilot or norm them as your study requires. |
+
+## 中文上手指南
+
+**第一次使用，推荐直接打开 [StimMAS 网页](https://huggingface.co/spaces/CUHKLPL/stimuli_generator)，并使用 OpenRouter。无需安装软件，也不需要会编程。**
+
+你只需要准备几条示例材料和实验要求。StimMAS 会让三个 AI 角色依次生成材料、检查硬性要求、评价材料质量，最后下载 CSV 表格。这三个角色共用你选择的模型，不需要分别注册三个账号。
+
+### 1. 注册 OpenRouter，拿到自己的 Key
+
+1. 打开 [OpenRouter](https://openrouter.ai/)，注册或登录。
+2. 进入 [API Keys 页面](https://openrouter.ai/settings/keys)，创建一个 Key。名称可以填 `StimMAS`，然后复制生成的 Key。
+3. 如果使用付费模型，在 OpenRouter 的账户/账单设置中充值。先查看所选模型的价格，再从少量材料开始试用。免费模型也可能有调用次数限制；可以查看 [OpenRouter FAQ](https://openrouter.ai/docs/faq)。
+4. 打开 [StimMAS 网页](https://huggingface.co/spaces/CUHKLPL/stimuli_generator)。
+
+**API Key 就是让工具使用你账户的私人通行码。** 在下表对应位置粘贴你自己的 Key，不要加引号，也不要加 `Bearer`。不要把 Key 放进截图、论文附件或共享文件；如果泄露，在 OpenRouter 上撤销后重新创建。
+
+### 2. 对照填写 Parameter Settings
+
+网页刚打开时默认选择的是 DeepSeek，**请先改成 OpenRouter**：
+
+| 网页上的字段 | 应该怎么填 |
+| --- | --- |
+| **Model** | 保持 **Predefined Models**，也就是使用工具已经准备好的模型配置。 |
+| **Model Configuration → Model name** | 在下拉菜单中选择 **openai/gpt-5.4 (OpenRouter)**。 |
+| **API URL** | 工具自动填好：`https://openrouter.ai/api/v1/chat/completions`，无需修改。 |
+| **Advanced Parameters** | 先保持默认两行：`max_tokens` / `Number` / `2000`；`temperature` / `Number` / `0.7`。 |
+| **API Key** | 粘贴刚才在 **OpenRouter** 创建的 Key。眼睛按钮可以显示或隐藏它。 |
+
+几个容易混淆的词，可以这样理解：
+
+| 名称 | 含义与完整例子 |
+| --- | --- |
+| **Provider：服务平台** | 你注册、充值、获取 Key 的地方。本教程使用 **OpenRouter**。 |
+| **Model name：模型编号** | 告诉平台要调用哪个 AI。本例是 `openai/gpt-5.4`，包括斜杠前的 `openai/`。 |
+| **API URL：请求地址** | StimMAS 将你的要求发往哪里。本例完整地址是 `https://openrouter.ai/api/v1/chat/completions`，不能只填 `https://openrouter.ai`。选择预设模型时会自动填写。 |
+| **API Key：账户通行码** | 必须从对应平台获取。本例即使调用 OpenAI 开发的模型，也用 **OpenRouter 的 Key**。 |
+
+**强烈推荐新手使用 OpenRouter**：以后想尝试不同开发者的模型，通常只需要修改模型编号，仍然使用相同的 OpenRouter 地址和 Key。浏览你想用的模型：[文本输入、文本输出模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text)。
+
+Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次回复的长度上限，**不是生成 2000 条材料**；`temperature = 0.7` 控制回答的变化程度，并不代表准确率。默认值可以先不动。点击 **JSON preview** 只是查看工具自动生成的参数。
+
+以后需要添加参数时，点击 **Add parameter**，依次填写参数名、类型和值。例如，模型支持 `top_p` 时可以填 `top_p` / `Number` / `0.9`。不同模型支持的参数可能不同，不确定就先保留默认值。类型说明和表单截图见上方 [Advanced Parameters 说明](#step-1-openrouter)。
+
+### 3. 填几条完整的示例材料
+
+下面用“主动句与被动句的理解”实验作为练习。**一个 Item 是一整组材料，包含一个动词、一个人名，以及两个条件的句子。**
+
+在 **Stimulus Design → Example stimuli** 中，先点击三次 **Add component**，把 Item 1 从一行增加到四行，然后填写下表的 Item 1。再点击 **Add item** 创建 Item 2、Item 3，并填写对应内容。
+
+| Components（每个 Item 都用相同的标签） | Item 1 的 Content | Item 2 的 Content | Item 3 的 Content |
+| --- | --- | --- | --- |
+| `Verb` | eat | read | paint |
+| `Name` | Alice | Ben | Clara |
+| `Active` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| `Passive` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+
+左侧 **Components** 是每一部分的名称，例如 `Verb`；右侧 **Content** 才是实际内容，例如 `eat`。每个 Item 都有自己的一张表，标签和顺序保持一致，同一张表内的标签不要重名。
+
+**避免跨材料重复：** 如果不同 Item 之间的动词、人名不能重复，就像上表这样把它们分别列成独立组件，放在使用它们的句子之前。同一 Item 的主被动句需要共享动词和人名；不同 Item 才需要使用不同的动词和人名。
+
+**Add component / Delete component** 会同时为所有示例增加/删除最后一行；**Add item** 增加一整条示例。新增的格子需要全部填好，不要留空。
+
+### 4. 填写 Stimulus design
+
+这个框是写给 AI 的材料要求。网页里的方括号内容是待替换的提示，请不要原样保留。第一次可以直接复制以下完整内容，生成英文主被动句材料：
+
+```text
+我们正在为一项研究英语主动句与被动句理解的实验设计材料，参与者为成年英语使用者。
+
+每个 Item 按以下顺序包含四个组件：Verb、Name、Active、Passive。组件标签必须保持这四个英文名称。
+
+实验包含两个条件：
+- Active：使用一般现在时的简单英语主动句，人名指代动作的执行者。
+- Passive：与主动句含义相同的被动句，用 by 短语注明同一个动作执行者。
+
+所有材料必须符合以下要求：
+- 同一 Item 的两个句子使用相同的动词、人名和宾语，并使用正确的词形变化。
+- 每个新 Item 的动词和人名都不能与示例或此前生成的 Item 重复。
+- 使用常见及物动词、常见物体和合理的日常事件。
+- 使用单数主语和语法正确的一般现在时。
+- 避免习语、指代不清的代词，以及令人不适的情绪性内容。
+
+两个条件应在含义、词汇和事件合理性上匹配。允许被动语态所需的语法变化，不要求两个句子的词数完全相同。
+```
+
+改成自己的实验时，交代清楚研究问题、材料语言、参与者、条件、必须包含/必须避免的内容，以及需要控制的属性。不要同时提出互相冲突的要求。
+
+### 5. 配置 Validator 和 Scorer
+
+**Validator 是硬性检查：每条要求都满足才接受这个 Item。** 在 **Agent Property Settings → Validator** 中，第一列 **Properties** 填一个简短名称，第二列 **Description** 填具体判断标准。用 **Add Validator's property** 增加行：
+
+| Properties | Description |
+| --- | --- |
+| `SameMeaning` | 主动句与被动句描述相同事件，动作执行者和宾语相同。 |
+| `CorrectVoice` | Active 是主动句；Passive 是被动句，并含有注明同一执行者的 by 短语。 |
+| `SameVerbAndName` | 两个句子都使用 Verb 中指定的动词及其正确词形，并使用 Name 中指定的人名。 |
+| `Grammatical` | 两个句子都是语法正确的一般现在时英语句子。 |
+
+每条标准都写成“满足时应当返回 true”的形式。例如写“句子不含习语”，不要写“句子含有习语”。
+
+**Scorer 是质量评分，便于你之后排序和筛选。** 填写 **Aspects**、**Description**、**Min score**、**Max score** 四列，用 **Add Scorer's aspect** 增加行：
+
+| Aspects | Description | Min score | Max score |
+| --- | --- | --- | --- |
+| `Fluency` | 评价两个句子的自然流畅程度。0 = 非常不自然；10 = 完全自然。如果两句表现不同，取较低的一句作为本项评分。 | `0` | `10` |
+| `Plausibility` | 评价句子描述的事件在日常生活中的合理程度。0 = 极不合理；10 = 非常合理。 | `0` | `10` |
+
+分数上下限填非负整数，最大值要大于最小值。低分不会自动淘汰材料；必须满足的要求应当放在 Validator 中。AI 评分也需要研究者检查。
+
+也可以在填好模型、示例和实验要求后，点击 **Auto-generate properties** 让 AI 起草这两个表格，然后自己检查、修改。这一步同样会调用模型、使用 API 额度。
+
+第一次使用时，保持 **Individual Criteria Validation** 和 **Individual Aspect Scoring** 不勾选。勾选后会为每条标准/每个评分维度单独调用模型，调用次数和耗时、费用都可能增加。
+
+### 6. 先生成 5 个 Item，再下载检查
+
+1. 在 **Output → The number of items** 填 `5`。这表示生成 5 组新材料，也就是本例的 5 对主被动句，共 10 个句子。
+2. 点击 **Generate stimulus**，保持页面打开。下方 **Agent Logs** 可以看到生成、检查、评分和重试的过程。
+3. 完成后网页会发起 CSV 下载，在浏览器的下载文件夹中找到结果，用 Excel、R 或 SPSS 打开。
+4. 逐条检查内容与评分，再决定是否扩大生成数量。生成一条材料可能需要多次模型调用，先看小批量结果和平台用量，再运行整套材料。
+
+CSV 中每行是一组 Item。`Key1` 是第一个组件的标签（例如 `Verb`），`Content1` 是对应内容（例如 `wash`）；后面的 `Key2 / Content2` 等以此类推。`Fluency` 等列是你设置的评分维度。评分缺失不会被当作 0 分；出现 `scoring_error` 时，需要检查受影响的材料。更多列的含义见上方 [CSV 说明](#step-5-output)。
+
+**Stop** 会请求停止，可能需要等待正在执行的请求结束；如果已有完成的 Item，会保存并下载部分结果。**Clear all** 会重置整个表单并清除 Key，模型也会恢复到 DeepSeek；再次使用 OpenRouter 时要重新选择。
+
+下载并保存 CSV，同时保留实验要求、示例、检查与评分标准、模型编号、参数和运行日期，便于以后复现。不要把 Key 一起保存到共享记录中。正式使用材料前，仍需按研究需要进行人工审核、预实验或常模评定。
+
+### 7. 换一个 OpenRouter 模型怎么填？
+
+在这个 [文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text) 中打开模型页面，复制完整模型编号。例如 [GPT-5.4](https://openrouter.ai/openai/gpt-5.4) 的编号是 `openai/gpt-5.4`，不是页面显示标题 `OpenAI: GPT-5.4`。
+
+回到 StimMAS 点击 **Custom Model**。这会清空模型名称和 URL，需要把下面两项都填上：
+
+```text
+Model name：openai/gpt-5.4（换模型时，替换为那个模型的完整编号）
+API URL：https://openrouter.ai/api/v1/chat/completions
+API Key：粘贴你自己的 OpenRouter Key
+```
+
+地址和 Key 保持不变，只替换模型编号即可。先查看模型价格、可用性和参数支持情况，并少量试跑；不同模型遵守 JSON 输出要求的能力可能不同。其他平台的完整配置见上方 [Common model names and URLs](#other-models)。
+
+### 常见问题速查
+
+| 遇到的情况 | 先检查什么 |
+| --- | --- |
+| 不知道 API URL 填什么 | 选 **Predefined Models → openai/gpt-5.4 (OpenRouter)**，URL 会自动填好。 |
+| 提示 Key 错误 / 401 | Key 是否来自 OpenRouter？模型是否也选了 OpenRouter？粘贴时有没有多余空格、引号？ |
+| 提示余额不足 / 402 | 检查平台余额以及 Key 的消费上限。 |
+| 提示模型找不到 / 404 | 模型编号是否完整？OpenRouter 的编号通常包含 `开发者/模型`，还要检查完整 URL。 |
+| 提示调用太频繁 / 429 | 查看平台的频率限制，稍后重试；免费模型可能限制更严。 |
+| 提示参数不支持 | 删除 Advanced Parameters 中被报错指出的参数，再少量试跑。 |
+| 总是检查不通过 | 看 Validator 日志，检查实验要求是否矛盾，或标准是否写反。 |
+| 没有下载文件 | 检查浏览器下载权限和下载列表；如果停止前没有任何完成的 Item，可能没有部分结果。 |
+
+<a id="local-development"></a>
+## Run locally or develop the app
+
+**This section is optional.** Online users do not need Python, Node.js, Git, or any of the commands below. Running locally still requires a supported model service and the matching API key.
+
+### Local installation
+
+Python 3.11 is recommended for the current setup. Install Python and Git first, then open a terminal:
+
+```bash
+git clone https://github.com/xufengduan/Stimuli_generator.git
+cd Stimuli_generator
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+stimulus-generator webui --host 127.0.0.1
+```
+
+The example above is for macOS/Linux. On Windows PowerShell, replace the environment creation and activation commands with:
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Then run the same `python -m pip install -e .` and `stimulus-generator webui --host 127.0.0.1` commands. Keep the terminal open and visit [http://127.0.0.1:5001](http://127.0.0.1:5001) in your browser. Press `Ctrl+C` in the terminal to stop the server.
+
+The command name remains `stimulus-generator` although the interface is called **StimMAS**. You can also launch it with `python run.py webui --host 127.0.0.1`. To use another port, append `--port 5002` and open `http://127.0.0.1:5002`.
+
+### Frontend development and checks
+
+Flask serves the committed `static/ui-react.js` bundle. Node.js is needed only when developing the frontend. After editing React sources, rebuild and commit the bundle:
 
 ```bash
 npm ci
 npm run build
+npm test
 ```
 
-The React controls synchronize with the existing form logic. Animations respect the system's reduced-motion preference.
+The React components provide the typed Advanced Parameters form, interface transitions, and animated title waves. Animations respect reduced-motion preferences and pause when the title is out of view or the page is hidden.
 
-Advanced Parameters accepts typed name/value rows and automatically builds the API JSON. It supports numbers, text, booleans and structured JSON, with validation for duplicate names and invalid values. The generated JSON is available in a read-only preview.
-
-## 📝 Usage Instructions
-
-### Launch Web Interface
-
-After installation, you can use the command-line tool to start the web interface:
+For backend regression checks:
 
 ```bash
-stimulus-generator webui
-```
-By default, the web interface will run at http://127.0.0.1:5001.
-
-### Command Line Arguments
-
-```bash
-stimulus-generator webui --port 5001
-```
-
-| Argument | Description |
-|----------|-------------|
-| `--host` | Specify host address (default: 0.0.0.0) |
-| `--port` | Specify port number (default: 5001) |
-| `--debug` | Enable debug mode |
-| `--share` | Create public link (requires additional dependencies) |
-
-## 🎯 Usage Steps
-
-### 1. Configure Generation Parameters
-
-#### 1.1 Select Language Model
-![Select Language Model](static/images/select_model.png)
-
-Choose between:
-- GPT-4o (OpenAI)
-- Custom Model (enter API URL and model name; supports DeepSeek, Qwen, Meta Llama, Mistral, etc.)
-
-#### 1.2 Enter API Key (as required by your provider)
-![Enter API Key](static/images/enter_api_key.png)
-
-Enter the API Key for the selected provider (e.g., OpenAI, DeepSeek, etc.) in the designated field.
-
-#### 1.3 Add Example Stimulus Materials
-![Add Example Materials](static/images/add_examples.png)
-
-Components are the building blocks of your stimuli. For example, in a study investigating contextual predictability on word choice:
-- A word pair (e.g., math/mathematics)
-- Supportive context (high predictability)
-- Neutral context
-
-Each component should be filled with its corresponding content. For instance:
-- Word pair: "math/mathematics"
-- Supportive context: "The student solved the simple arithmetic problem using basic..."
-- Neutral context: "The student was working on a problem that required..."
-
-To add more examples:
-1. Complete all components for the first item
-2. Click "Add Item" in the bottom right corner
-3. Repeat for additional examples (recommended: at least 3 examples)
-
-#### 1.4 Fill in Experimental Design Description
-![Experimental Design](static/images/experimental_design.png)
-
-When writing your experimental design description, include these key components:
-
-1. **Purpose of the Stimuli**
-   - Explain the experiment's goal
-   - Describe how the stimuli support this goal
-   - Example: "We are designing stimuli for an experiment investigating whether people prefer shorter words in predictive contexts."
-
-2. **Core Structure of Each Stimulus Item**
-   - Describe the components of each item
-   - Example: "Each stimulus item includes a word pair and two contexts."
-
-3. **Detailed Description of Each Element**
-   For each component, specify:
-   - What it is
-   - How it's constructed
-   - What constraints apply
-   - What to avoid
-   - Example: "The word pair consists of a short and a long form of the same word... Avoid pairs where either word forms part of a fixed or common phrase."
-
-4. **Experimental Conditions or Variants**
-   Explain:
-   - Definition of each condition
-   - Construction criteria
-   - Matching constraints
-   - Example: "The supportive context should strongly predict the missing final word... The two contexts should be matched for length."
-
-5. **Example Item**
-   Include at least one complete example with labeled parts.
-
-6. **Formatting Guidelines**
-   Note any specific formatting or submission requirements.
-
-#### 1.5 Review Auto-generated Properties
-![Review Properties](static/images/review_properties.png)
-
-After completing the experimental design:
-1. Click "Auto-generate Properties"
-2. The system will automatically set:
-   - Validation conditions
-   - Scoring dimensions
-3. **Important**: Review and adjust these auto-generated properties as needed
-
-### 2. Start Generation
-![Start Generation](static/images/Generating.gif)
-
-1. Click the "Generate stimulus" button
-2. Monitor progress in real-time
-3. View detailed logs
-4. Use "Stop" button if needed
-
-### 3. Get Results
-![Get Results](static/images/get_results.png)
-
-- CSV file automatically downloads upon completion
-- Contains generated materials and scores
-
-## 📂 File Structure
-
-```
-Stimulus-Generator/
-├── stimulus_generator/    # Main Python package
-│   ├── __init__.py        # Package initialization file
-│   ├── app.py             # Flask backend server
-│   ├── backend.py         # Core backend functionality
-│   └── cli.py             # Command line interface
-├── run.py                 # Quick start script
-├── setup.py               # Package installation configuration
-├── static/
-│   ├── script.js          # Frontend JavaScript code
-│   ├── styles.css         # Page stylesheet
-│   └── Stimulus Generator Web Logo.png  # Website icon
-├── webpage.html           # Main page
-├── requirements.txt       # Python dependency list
-└── README.md              # Project documentation
-```
-
-## 🛠️ Command Line Tools
-
-After installation, you can use the following command-line tools:
-
-```bash
-# Launch web interface
-stimulus-generator webui [--host HOST] [--port PORT] [--debug] [--share]
-
-# View help
-stimulus-generator --help
-```
-
-If you don't want to install, you can also run directly:
-
-```bash
-# After cloning the repository, run in the project directory
-python run.py webui
-```
-
-## ⚠️ Notes
-
-1. **API Key Security**:
-   - Please keep your OpenAI API Key secure
-   - Do not expose API Keys in public environments
-
-2. **Generation Process**:
-   - Generation process may take some time, please be patient
-   - You can monitor generation status in real time through the log panel
-   - You can stop generation at any time if there are issues
-
-3. **Results Usage**:
-   - It is recommended to check if the generated materials meet experimental requirements
-   - Manual screening or modification of generated materials may be needed
-
-## ❓ FAQ
-
-<details>
-<summary><b>What to do if the generation process gets stuck?</b></summary>
-<br>
-- Check if the network connection is normal
-- Click the "Stop" button to stop the current generation
-- Refresh the page to restart
-- If the page is unresponsive for a long time, wait for 30 seconds and the system will automatically unlock the interface
-</details>
-
-<details>
-<summary><b>How to solve WebSocket connection errors?</b></summary>
-<br>
-- Ensure that the network environment does not block WebSocket connections
-- If you see WebSocket error messages, refresh the page to re-establish the connection
-- Restart the server or try using a different browser
-- WebSocket connection issues will not affect main functionality, the system has automatic recovery mechanisms
-</details>
-
-<details>
-<summary><b>How to optimize generation quality?</b></summary>
-<br>
-- Provide more detailed examples
-- Improve experimental design description
-- Set appropriate validation conditions
-</details>
-
-<details>
-<summary><b>How to handle slow generation speed?</b></summary>
-<br>
-- Consider reducing the number of items to generate
-- Ensure stable network connection
-- Choose a model with faster response
-</details>
-
-## 📞 Technical Support
-
-For questions or suggestions, please contact:
-- Submit an [Issue](https://github.com/xufengduan/Stimuli_generator/issues)
-- Send an email to: ...
-
-## 📄 License
-
-This project is licensed under the [Apache License 2.0](LICENSE). See the LICENSE file for details.
-
----
-
-<details id="chinese-content">
-<summary><a id="chinese"></a>中文版本 (Chinese Version)</summary>
-
-## 📖 项目简介
-
-Stimulus Generator 是一个基于大语言模型的刺激材料生成工具，专门为心理语言学研究设计。它能够根据研究者定义的实验设计和示例，自动生成符合要求的实验刺激材料。该工具采用多代理架构，包含生成器(Generator)、验证器(Validator)和评分器(Scorer)三个代理，确保生成的刺激材料满足实验要求并具有良好的质量。
-
-## ✨ 主要特点
-
-- **🤖 多代理架构**：
-  - **Generator**：根据实验设计生成刺激材料
-  - **Validator**：验证生成的材料是否符合实验要求
-  - **Scorer**：对材料进行多维度评分
-
-- **🔄 灵活的模型选择**：
-  - 支持 OpenAI GPT-4o（需要 OpenAI API Key）
-  - 支持自定义模型（通过 OpenAI 兼容 API；如 DeepSeek、Qwen、Meta Llama、Mistral 等）
-
-- **📊 实时进度监控**：
-  - WebSocket 实时更新生成进度
-  - 详细的日志信息显示
-  - 可随时停止生成过程
-
-- **🎨 用户友好界面**：
-  - 直观的表单设计
-  - 实时验证和反馈
-  - 响应式布局设计
-  - 详细的帮助信息提示
-
-## 💻 系统要求
-
-| 要求 | 详情 |
-|------|------|
-| Python | 3.8 或更高版本 |
-| 浏览器 | 现代网页浏览器（Chrome、Firefox、Safari 等） |
-| 网络 | 稳定的网络连接 |
-| Socket.IO | 客户端版本 4.x（与服务器端兼容） |
-
-## 🚀 安装说明
-
-### 直接从GitHub仓库中克隆
-
-```bash
-# 1. 克隆项目代码
-git clone https://github.com/xufengduan/Stimuli_generator.git
-cd Stimuli_generator
-
-# 2. 创建并激活虚拟环境（推荐）
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-
-# 3. 安装项目所需依赖
-pip install -e .
-```
-
-## 📝 使用说明
-
-### 启动Web界面
-
-安装完成后，可以直接使用命令行工具启动Web界面：
-
-```bash
-stimulus-generator webui
-```
-
-默认情况下，Web界面将在 http://127.0.0.1:5001 上运行。
-
-### 命令行参数
-
-```bash
-stimulus-generator webui --port 5001
-```
-
-| 参数 | 描述 |
-|------|------|
-| `--host` | 指定主机地址（默认：0.0.0.0） |
-| `--port` | 指定端口号（默认：5001） |
-| `--debug` | 启用调试模式 |
-| `--share` | 创建公共链接（需要安装额外依赖） |
-
-## 🎯 使用步骤
-
-### 1. 配置生成参数
-
-#### 1.1 选择语言模型
-![选择语言模型](static/images/select_model.png)
-
-可选择：
-- GPT-4o（OpenAI）
-- 自定义模型（填写 API URL 和模型名称；支持 DeepSeek、Qwen、Meta Llama、Mistral 等）
-
-#### 1.2 输入 API Key（根据所选模型提供商）
-![输入 API Key](static/images/enter_api_key.png)
-
-请在指定字段中输入所选提供商（如 OpenAI、DeepSeek 等）的 API Key。
-
-#### 1.3 添加示例刺激材料
-![添加示例材料](static/images/add_examples.png)
-
-组件（Components）是刺激材料的组成部分。例如，在研究语境可预测性对词汇选择的影响时：
-- 词对（例如：math/mathematics）
-- 支持性语境（高可预测性）
-- 中性语境
-
-每个组件都需要填写相应的内容。例如：
-- 词对："math/mathematics"
-- 支持性语境："学生使用基本的算术解决了这个简单的问题..."
-- 中性语境："学生正在解决一个需要..."
-
-添加更多示例：
-1. 完成第一个项目的所有组件
-2. 点击右下角的"添加项目"按钮
-3. 重复上述步骤添加更多示例（建议至少添加3个示例）
-
-#### 1.4 填写实验设计说明
-![实验设计](static/images/experimental_design.png)
-
-在编写实验设计说明时，请包含以下关键部分：
-
-1. **刺激材料的目的**
-   - 解释实验目标
-   - 描述刺激材料如何支持这个目标
-   - 示例："我们正在设计用于研究人们在可预测语境中是否倾向于使用较短词汇的实验刺激材料。"
-
-2. **每个刺激项目的核心结构**
-   - 描述每个项目的组成部分
-   - 示例："每个刺激项目包含一个词对和两个语境。"
-
-3. **每个元素的详细描述**
-   对于每个组件，请说明：
-   - 它是什么
-   - 如何构建
-   - 适用的约束条件
-   - 需要避免的内容
-   - 示例："词对由同一个词的短形式和长形式组成...避免使用固定搭配或常见短语中的词。"
-
-4. **实验条件或变体**
-   说明：
-   - 每个条件的定义
-   - 构建标准
-   - 匹配约束
-   - 示例："支持性语境应该强烈预测缺失的最后一个词...两个语境应该在长度上匹配。"
-
-5. **示例项目**
-   包含至少一个完整的示例，并标注各个部分。
-
-6. **格式指南**
-   注明任何特定的格式或提交要求。
-
-#### 1.5 检查自动生成的属性
-![检查属性](static/images/review_properties.png)
-
-完成实验设计后：
-1. 点击"自动生成属性"按钮
-2. 系统将自动设置：
-   - 验证条件
-   - 评分维度
-3. **重要**：请检查并根据需要调整这些自动生成的属性
-
-### 2. 开始生成
-![开始生成](static/images/Generating.gif)
-
-1. 点击"生成刺激材料"按钮
-2. 实时监控进度
-3. 查看详细日志
-4. 必要时使用"停止"按钮
-
-### 3. 获取结果
-![获取结果](static/images/get_results.png)
-
-- 完成后自动下载 CSV 格式的结果文件
-- 包含生成的刺激材料及其评分
-
-## 📂 文件结构
-
-```
-Stimulus-Generator/
-├── stimulus_generator/    # 主Python包
-│   ├── __init__.py        # 包初始化文件
-│   ├── app.py             # Flask 后端服务器
-│   ├── backend.py         # 后端核心功能
-│   └── cli.py             # 命令行接口
-├── run.py                 # 快速启动脚本
-├── setup.py               # 包安装配置
-├── static/
-│   ├── script.js          # 前端 JavaScript 代码
-│   ├── styles.css         # 页面样式表
-│   └── Stimulus Generator Web Logo.png  # 网站图标
-├── webpage.html           # 主页面
-├── requirements.txt       # Python 依赖列表
-└── README.md              # 项目说明文档
-```
-
-## 🛠️ 命令行工具
-
-安装后，可以使用以下命令行工具：
-
-```bash
-# 启动Web界面
-stimulus-generator webui [--host HOST] [--port PORT] [--debug] [--share]
-
-# 查看帮助
-stimulus-generator --help
-```
-
-如果您不想安装，也可以直接使用以下方式运行：
-
-```bash
-# 克隆仓库后，在项目目录中运行
-python run.py webui
-```
-
-## ⚠️ 注意事项
-
-1. **API 密钥安全**：
-   - 请妥善保管您的 OpenAI API Key
-   - 不要在公共环境中暴露 API Key
-
-2. **生成过程**：
-   - 生成过程可能需要一定时间，请耐心等待
-   - 可以通过日志面板实时监控生成状态
-   - 如遇到问题可以随时停止生成
-
-3. **结果使用**：
-   - 建议检查生成的材料是否符合实验要求
-   - 可能需要对生成的材料进行人工筛选或修改
-
-## ❓ 常见问题
-
-<details>
-<summary><b>生成过程卡住怎么办？</b></summary>
-<br>
-   - 检查网络连接是否正常
-   - 点击 "Stop" 按钮停止当前生成
-   - 刷新页面重新开始
-   - 如果页面长时间无响应，可以等待30秒，系统会自动解除界面锁定
-</details>
-
-<details>
-<summary><b>WebSocket连接错误如何解决？</b></summary>
-<br>
-   - 确保网络环境没有阻止WebSocket连接
-   - 如果看到WebSocket错误信息，可以刷新页面重新建立连接
-   - 重启服务器或尝试使用不同的浏览器
-   - WebSocket连接问题不会影响主要功能，系统有自动恢复机制
-</details>
-
-<details>
-<summary><b>如何优化生成质量？</b></summary>
-<br>
-   - 提供更多详细的示例
-   - 完善实验设计说明
-   - 设置合适的验证条件
-</details>
-
-<details>
-<summary><b>生成速度较慢怎么处理？</b></summary>
-<br>
-   - 考虑减少生成数量
-   - 确保网络连接稳定
-   - 选择响应更快的模型
-</details>
-
-## 📞 技术支持
-
-如有问题或建议，请通过以下方式联系：
-- 提交 [Issue](https://github.com/xufengduan/Stimuli_generator/issues)
-- 发送邮件至：...
-
-## 📄 许可证
-
-本项目采用 [Apache License 2.0](LICENSE) 许可证。详见 LICENSE 文件。
-
-</details>
-
-## Reliability and interface update (2026-11-17)
-
-The generation → validation → scoring → CSV workflow and repetition rule remain
-unchanged. Validation now requires complete boolean responses, failed scores are
-exported as missing values with an error marker, provider failures have bounded
-retries, and active jobs cannot be replaced by duplicate submissions. Downloads
-can be retried, and legacy saved stimulus content is supported. API subprocess
-handling and untrusted HTML output are fixed. Custom endpoints are restricted to
-public HTTP(S) addresses, pinned to checked IPs with TLS verification; redirects
-are rejected.
-
-Prompts now clarify JSON output, boolean criteria, and dimension-specific score
-direction. Prompt wording and effective sampling settings can affect outputs;
-record this revision when comparing with earlier results.
-
-The interface defaults to Custom Model (including after Clear all), provides a
-read-only component example and a four-column API reference for DeepSeek,
-OpenRouter and OpenAI. OpenAI examples use `gpt-5.4` and `openai/gpt-5.4`.
-For these two model IDs, requests default to no reasoning so sampling parameters
-remain supported; explicit higher reasoning effort is retained and incompatible
-sampling parameters are omitted. Existing GPT-4o mode is retained for compatibility.
-Model IDs are examples; check provider availability.
-
-Install development dependencies and run regression checks from the repository:
-
-```sh
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
-node tests/test_frontend.cjs
 ```
 
-The Python package structure, `python run.py` and `stimulus-generator webui` entry
-points are preserved. Tests use simulated API responses and do not consume credits.
+These tests use simulated model responses and do not consume API credits.
 
+| File or directory | Purpose |
+| --- | --- |
+| `webpage.html` | Main page and field help. |
+| `static/script.js`, `static/styles.css` | Form workflow, logs, and styling. |
+| `frontend/` | React components, parameter serialization, and bundle build. |
+| `static/ui-react.js` | Prebuilt browser bundle. |
+| `stimulus_generator/app.py` | Web server, sessions, API proxy, and CSV downloads. |
+| `stimulus_generator/backend.py` | Generation, validation, scoring, and retries. |
+| `stimulus_generator/cli.py`, `run.py` | Local launch commands. |
+| `tests/` | Backend and frontend regression tests. |
 
-The model reference separates Provider, URL, Model name, and API-key links into
-four columns. Custom parameters are prefilled with
-`{"max_tokens": 2000, "temperature": 0.7}` and restored by Clear all. GPT-5.4
-requests sent directly to OpenAI translate `max_tokens` to
-`max_completion_tokens`; OpenRouter keeps its supported `max_tokens` parameter.
+## Feedback and related tools
+
+Report problems or suggest improvements through [GitHub Issues](https://github.com/xufengduan/Stimuli_generator/issues). Include the steps you followed and the error text; remove API keys before sharing screenshots or logs.
+
+For conducting behavioral experiments **on language models**, see [MacBehaviour](https://github.com/xufengduan/MacBehaviour), a related R package. StimMAS focuses on preparing stimulus materials.
+
+## License
+
+Released under the [Apache License 2.0](LICENSE).
