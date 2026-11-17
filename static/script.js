@@ -1842,7 +1842,7 @@ clearButton.addEventListener('click', () => {
     customModelFields.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
-            element.value = '';
+            element.value = id === 'custom_params' ? element.defaultValue : '';
         }
     });
 

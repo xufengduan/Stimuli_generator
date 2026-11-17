@@ -93,16 +93,7 @@ h2::before {
     line-height: 1.4;
 }
 
-.component-tip {
-    margin: 0 0 16px;
-    padding: 12px 14px;
-    border-left: 4px solid #b7791f;
-    border-radius: 6px;
-    background-color: #fff7db;
-    color: #684515;
-    font-size: 0.95rem;
-    line-height: 1.5;
-}
+
 
 .container {
     max-width: 950px;
@@ -1428,12 +1419,19 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 16px;
 }
 
+.model-reference,
 .component-tip {
     padding: 16px 18px;
+    border: 1px solid #d8e9ec;
     border-left: 4px solid #398d98;
     border-radius: 10px;
     background: #eef7f8;
     color: #31545f;
+}
+
+.api-key-group {
+    margin-top: 24px;
+    margin-bottom: 24px;
 }
 
 .component-tip p {
@@ -1486,7 +1484,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .model-reference h3 {
     margin: 0 0 12px;
-    color: #294f68;
+    color: #176473;
     font-size: 1rem;
 }
 
@@ -1508,8 +1506,8 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .model-reference-table thead th {
-    background: #315a73;
-    color: #ffffff;
+    background: #dceef0;
+    color: #285e69;
     font-weight: 600;
 }
 
@@ -1519,7 +1517,7 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .model-reference-table tbody tr:nth-child(even) td {
-    background: #f4f8fc;
+    background: #f6fbfb;
 }
 
 .model-reference-table tbody tr:last-child td {
@@ -1538,19 +1536,19 @@ input[type="number"]::-webkit-inner-spin-button {
     color: #415b70;
 }
 
-.model-reference-table td:nth-child(2) code {
+.model-reference-table td:nth-child(3) code {
     display: inline-block;
     padding: 3px 7px;
-    background: #e7eff8;
-    color: #315a83;
+    background: #e3f0f2;
+    color: #285e69;
     border-radius: 5px;
 }
 
 .model-reference-table a {
     display: inline-block;
     padding: 5px 8px;
-    background: #e9f3fa;
-    color: #23648d;
+    background: #e1eff2;
+    color: #176473;
     border-radius: 6px;
     text-decoration: none;
     font-weight: 600;
@@ -1558,7 +1556,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .model-reference-table a:hover,
 .model-reference-table a:focus-visible {
-    background: #d9eaf6;
+    background: #cfe5e9;
     text-decoration: underline;
 }
 
@@ -1569,9 +1567,17 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .model-reference-table th:first-child {
-    width: 52%;
+    width: 14%;
 }
 
 .model-reference-table th:nth-child(2) {
+    width: 42%;
+}
+
+.model-reference-table th:nth-child(3) {
+    width: 21%;
+}
+
+.model-reference-table th:nth-child(4) {
     width: 23%;
 }

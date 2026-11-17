@@ -281,3 +281,21 @@ def test_packaged_web_assets(client):
     assert b'component-example-table' in response.data
     assert client.get('/static/script.js').status_code == 200
     assert client.get('/static/styles.css').status_code == 200
+
+
+@pytest.mark.parametrize('url,model,token_key', [
+    ('https://api.openai.com/v1/chat/completions', 'gpt-5.4', 'max_completion_tokens'),
+    ('https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-5.4', 'max_tokens'),
+])
+def test_prefilled_params_work_with_reference_models(monkeypatch, url, model, token_key):
+    post = Mock(return_value={'choices': [{'message': {'content': '{"text": "item"}'}}]})
+    monkeypatch.setattr(backend, 'post_public_json', post)
+    monkeypatch.setattr(backend, 'call_with_timeout', lambda func, args, kwargs, timeout: func(*args, **kwargs))
+    params = {'max_tokens': 2000, 'temperature': 0.7}
+    backend.CustomModelClient(url, 'dummy', model).generate_completion('prompt', {}, params)
+    payload = post.call_args.args[2]
+    assert payload[token_key] == 2000
+    assert payload['temperature'] == 0.7
+    if token_key == 'max_completion_tokens':
+        assert 'max_tokens' not in payload
+    assert params == {'max_tokens': 2000, 'temperature': 0.7}

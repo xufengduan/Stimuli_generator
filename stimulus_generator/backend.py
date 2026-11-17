@@ -442,6 +442,10 @@ class CustomModelClient(ModelClient):
                     request_data.setdefault('reasoning', {'effort': 'none'})
                 effort = request_data.get('reasoning_effort', request_data.get('reasoning', {}).get('effort', 'none'))
             else:
+                # Current OpenAI chat models use max_completion_tokens; the UI
+                # keeps the familiar max_tokens setting for other providers.
+                if 'max_tokens' in request_data:
+                    request_data.setdefault('max_completion_tokens', request_data.pop('max_tokens'))
                 request_data.setdefault('reasoning_effort', 'none')
                 effort = request_data['reasoning_effort']
             if effort != 'none':

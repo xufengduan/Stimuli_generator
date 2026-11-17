@@ -590,7 +590,7 @@ direction. Prompt wording and effective sampling settings can affect outputs;
 record this revision when comparing with earlier results.
 
 The interface defaults to Custom Model (including after Clear all), provides a
-read-only component example and a three-column API reference for DeepSeek,
+read-only component example and a four-column API reference for DeepSeek,
 OpenRouter and OpenAI. OpenAI examples use `gpt-5.4` and `openai/gpt-5.4`.
 For these two model IDs, requests default to no reasoning so sampling parameters
 remain supported; explicit higher reasoning effort is retained and incompatible
@@ -607,3 +607,10 @@ node tests/test_frontend.cjs
 
 The Python package structure, `python run.py` and `stimulus-generator webui` entry
 points are preserved. Tests use simulated API responses and do not consume credits.
+
+
+The model reference separates Provider, URL, Model name, and API-key links into
+four columns. Custom parameters are prefilled with
+`{"max_tokens": 2000, "temperature": 0.7}` and restored by Clear all. GPT-5.4
+requests sent directly to OpenAI translate `max_tokens` to
+`max_completion_tokens`; OpenRouter keeps its supported `max_tokens` parameter.
