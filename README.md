@@ -45,24 +45,24 @@ An **API key** is a private access code that lets StimMAS send requests using yo
 
 ### 2. Fill in Parameter Settings
 
-For the first run, use the free OpenRouter preset, [NVIDIA Nemotron 3.5 Super VL (free)](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free). Free endpoints have rate limits; start with a small batch. Find other free options in the [free text model catalog](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free).
+For the first run, use the free OpenRouter preset, [Google Gemma 4 31B (free)](https://openrouter.ai/google/gemma-4-31b-it:free). Free endpoints have rate limits; start with a small batch. Find other free options in the [free text model catalog](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free).
 
 | On the StimMAS page | What to select or enter |
 | --- | --- |
 | **Model** | Keep **Predefined Models** selected. |
-| **Model Configuration → Model name** | Select **nvidia/nemotron-3.5-super-vl:free (OpenRouter)** from the dropdown. |
+| **Model Configuration → Model name** | Select **google/gemma-4-31b-it:free (OpenRouter)** from the dropdown. |
 | **API URL** | Filled automatically: `https://openrouter.ai/api/v1/chat/completions` |
 | **Advanced Parameters** | Leave the two default rows: `max_tokens` / `Number` / `2000`; `temperature` / `Number` / `0.7`. |
 | **API Key** | Paste the key you just created **on OpenRouter**. The eye button shows or hides it. |
 
-The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. Use your OpenRouter key for this NVIDIA model; no separate NVIDIA key is needed.
+The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. Use your OpenRouter key for this Google model; no separate Google key is needed.
 
 **What do these unfamiliar terms mean?**
 
 | Term | Plain-language meaning | Example for this walkthrough |
 | --- | --- | --- |
 | **Provider** | The service receiving the requests and charging your account. | OpenRouter |
-| **Model name** | The exact identifier of the AI model to use. | `nvidia/nemotron-3.5-super-vl:free` |
+| **Model name** | The exact identifier of the AI model to use. | `google/gemma-4-31b-it:free` |
 | **API URL** | The web address where StimMAS sends requests. It is different from the provider's homepage. | `https://openrouter.ai/api/v1/chat/completions` |
 | **API Key** | Your private access code, obtained from that provider. | Your own OpenRouter key; the text in this guide is not a working key. |
 
@@ -233,9 +233,9 @@ Missing ratings are not automatically replaced with zero. Review missing values 
 
 **We recommend OpenRouter for trying and comparing models:** you can keep the same API URL and OpenRouter key while changing the model ID. Browse the [free model catalog with text input and output filters](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free).
 
-1. Open a model's page and copy its exact identifier. For example, the [Nemotron 3.5 Super VL (free) page](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free) uses `nvidia/nemotron-3.5-super-vl:free`. Copy the identifier, rather than the display title “NVIDIA: Nemotron 3.5 Super VL (free)”.
+1. Open a model's page and copy its exact identifier. For example, the [Gemma 4 31B (free) page](https://openrouter.ai/google/gemma-4-31b-it:free) uses `google/gemma-4-31b-it:free`. Copy the identifier, rather than the display title “Google: Gemma 4 31B (free)”.
 2. In StimMAS, click **Custom Model**. **This clears the preset model name and API URL.** Fill in both fields again.
-3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `nvidia/`.
+3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `google/`.
 4. Paste `https://openrouter.ai/api/v1/chat/completions` in **API URL** and use your **OpenRouter** key in **API Key**.
 5. Check the model's price, availability, and supported parameters, then run a small pilot. StimMAS uses `json_object` for OpenRouter and other non-OpenAI endpoints, with field requirements in the prompt and application-side checks. Direct OpenAI requests retain `json_schema`. Models must support the selected output format. StimMAS needs text responses in the requested JSON format; models can differ in how reliably they follow that format.
 
@@ -243,7 +243,7 @@ For example, a fully filled custom configuration for the model used in the tutor
 
 ```text
 Model:       Custom Model
-Model name:  nvidia/nemotron-3.5-super-vl:free
+Model name:  google/gemma-4-31b-it:free
 API URL:     https://openrouter.ai/api/v1/chat/completions
 API Key:     paste your own OpenRouter key here
 ```
@@ -254,7 +254,7 @@ OpenRouter is the recommended starting point; direct DeepSeek and OpenAI access 
 
 | Provider | Example Model name | Complete API URL | Where to get the matching key |
 | --- | --- | --- | --- |
-| **OpenRouter — recommended** | `nvidia/nemotron-3.5-super-vl:free` | `https://openrouter.ai/api/v1/chat/completions` | [OpenRouter API keys](https://openrouter.ai/settings/keys) |
+| **OpenRouter — recommended** | `google/gemma-4-31b-it:free` | `https://openrouter.ai/api/v1/chat/completions` | [OpenRouter API keys](https://openrouter.ai/settings/keys) |
 | DeepSeek | `deepseek-flash` | `https://api.deepseek.com/chat/completions` | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
 | OpenAI | `gpt-5.4` | `https://api.openai.com/v1/chat/completions` | [OpenAI API keys](https://platform.openai.com/api-keys) |
 
@@ -272,7 +272,7 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 | **The model name or API URL is blank.** | Switching to Custom Model clears both. Refill both fields, or switch to Predefined Models and select the OpenRouter preset. |
 | **401 / invalid API key** | Check for extra spaces and confirm the key belongs to the selected provider. Use an OpenRouter key with the OpenRouter URL. |
 | **402 / insufficient credits** | Check your provider's balance and any key spending limit. |
-| **404 / model not found** | Check the full model ID and API URL. On OpenRouter, include the prefix, e.g., `nvidia/nemotron-3.5-super-vl:free`. |
+| **404 / model not found** | Check the full model ID and API URL. On OpenRouter, include the prefix, e.g., `google/gemma-4-31b-it:free`. |
 | **429 / rate limit** | Check the provider's rate limits and retry later. Free models may have tighter limits. |
 | **Unsupported parameter / 400** | Check which parameter the provider rejects. Remove that row from Advanced Parameters and try a small run again. |
 | **Invalid JSON or incomplete model response** | Try increasing `max_tokens`, simplifying the design, or choosing a model that follows structured-output instructions more reliably. |
@@ -299,12 +299,12 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 
 ### 2. 对照填写 Parameter Settings
 
-网页刚打开时默认选择的是 DeepSeek，**请先改成 OpenRouter**。OpenRouter 预设使用免费模型 `nvidia/nemotron-3.5-super-vl:free`。其他免费模型可以在[免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free)中找到；免费接口也有调用频率和额度限制，建议先少量试跑：
+网页刚打开时默认选择的是 DeepSeek，**请先改成 OpenRouter**。OpenRouter 预设使用免费模型 `google/gemma-4-31b-it:free`。其他免费模型可以在[免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free)中找到；免费接口也有调用频率和额度限制，建议先少量试跑：
 
 | 网页上的字段 | 应该怎么填 |
 | --- | --- |
 | **Model** | 保持 **Predefined Models**，也就是使用工具已经准备好的模型配置。 |
-| **Model Configuration → Model name** | 在下拉菜单中选择 **nvidia/nemotron-3.5-super-vl:free (OpenRouter)**。 |
+| **Model Configuration → Model name** | 在下拉菜单中选择 **google/gemma-4-31b-it:free (OpenRouter)**。 |
 | **API URL** | 工具自动填好：`https://openrouter.ai/api/v1/chat/completions`，无需修改。 |
 | **Advanced Parameters** | 先保持默认两行：`max_tokens` / `Number` / `2000`；`temperature` / `Number` / `0.7`。 |
 | **API Key** | 粘贴刚才在 **OpenRouter** 创建的 Key。眼睛按钮可以显示或隐藏它。 |
@@ -314,9 +314,9 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 | 名称 | 含义与完整例子 |
 | --- | --- |
 | **Provider：服务平台** | 你注册、充值、获取 Key 的地方。本教程使用 **OpenRouter**。 |
-| **Model name：模型编号** | 告诉平台要调用哪个 AI。本例是 `nvidia/nemotron-3.5-super-vl:free`，包括斜杠前的 `nvidia/`。 |
+| **Model name：模型编号** | 告诉平台要调用哪个 AI。本例是 `google/gemma-4-31b-it:free`，包括斜杠前的 `google/`。 |
 | **API URL：请求地址** | StimMAS 将你的要求发往哪里。本例完整地址是 `https://openrouter.ai/api/v1/chat/completions`，不能只填 `https://openrouter.ai`。选择预设模型时会自动填写。 |
-| **API Key：账户通行码** | 必须从对应平台获取。本例调用 NVIDIA 开发的模型，也用 **OpenRouter 的 Key**，不需要另一个 NVIDIA Key。 |
+| **API Key：账户通行码** | 必须从对应平台获取。本例调用 Google 开发的模型，也用 **OpenRouter 的 Key**，不需要另一个 Google Key。 |
 
 **强烈推荐新手使用 OpenRouter**：以后想尝试不同开发者的模型，通常只需要修改模型编号，仍然使用相同的 OpenRouter 地址和 Key。浏览你想用的模型：[免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free)。
 
@@ -409,12 +409,12 @@ CSV 中每行是一组 Item。`Key1` 是第一个组件的标签（例如 `Verb`
 
 ### 7. 换一个 OpenRouter 模型怎么填？
 
-在这个 [免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free) 中打开模型页面，复制完整模型编号。例如 [Nemotron 3.5 Super VL (free)](https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free) 的编号是 `nvidia/nemotron-3.5-super-vl:free`，不是页面显示标题 `NVIDIA: Nemotron 3.5 Super VL (free)`。
+在这个 [免费文本模型列表](https://openrouter.ai/models?input_modalities=text&output_modalities=text&variant=free) 中打开模型页面，复制完整模型编号。例如 [Gemma 4 31B (free)](https://openrouter.ai/google/gemma-4-31b-it:free) 的编号是 `google/gemma-4-31b-it:free`，不是页面显示标题 `Google: Gemma 4 31B (free)`。
 
 回到 StimMAS 点击 **Custom Model**。这会清空模型名称和 URL，需要把下面两项都填上：
 
 ```text
-Model name：nvidia/nemotron-3.5-super-vl:free（换模型时，替换为那个模型的完整编号）
+Model name：google/gemma-4-31b-it:free（换模型时，替换为那个模型的完整编号）
 API URL：https://openrouter.ai/api/v1/chat/completions
 API Key：粘贴你自己的 OpenRouter Key
 ```
@@ -425,7 +425,7 @@ API Key：粘贴你自己的 OpenRouter Key
 
 | 遇到的情况 | 先检查什么 |
 | --- | --- |
-| 不知道 API URL 填什么 | 选 **Predefined Models → nvidia/nemotron-3.5-super-vl:free (OpenRouter)**，URL 会自动填好。 |
+| 不知道 API URL 填什么 | 选 **Predefined Models → google/gemma-4-31b-it:free (OpenRouter)**，URL 会自动填好。 |
 | 提示 Key 错误 / 401 | Key 是否来自 OpenRouter？模型是否也选了 OpenRouter？粘贴时有没有多余空格、引号？ |
 | 提示余额不足 / 402 | 检查平台余额以及 Key 的消费上限。 |
 | 提示模型找不到 / 404 | 模型编号是否完整？OpenRouter 的编号通常包含 `开发者/模型`，还要检查完整 URL。 |

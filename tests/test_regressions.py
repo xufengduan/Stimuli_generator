@@ -307,7 +307,7 @@ def test_gpt54_sampling_compatibility(monkeypatch, url, model, params, effort_ke
 def test_packaged_web_assets(client):
     response = client.get('/package-smoke')
     assert response.status_code == 200
-    assert b'nvidia/nemotron-3.5-super-vl:free' in response.data
+    assert b'google/gemma-4-31b-it:free' in response.data
     assert b'component-example-table' in response.data
     assert client.get('/static/script.js').status_code == 200
     assert client.get('/static/styles.css').status_code == 200
