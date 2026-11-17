@@ -251,6 +251,36 @@ def test_empty_worker_queue(monkeypatch):
     result_queue.close.assert_called_once()
 
 
+@pytest.mark.parametrize('url,expected', [
+    ('https://api.openai.com/v1/chat/completions', 'json_schema'),
+    ('https://api.deepseek.com/chat/completions', 'json_object'),
+    ('https://openrouter.ai/api/v1/chat/completions', 'json_object'),
+    ('https://example.com/v1/chat/completions', 'json_object'),
+    ('https://api.openai.com.example.com/chat/completions', 'json_object'),
+])
+@pytest.mark.parametrize('prompt,properties,instruction', [
+    ('Generate one item', {'Text': {'type': 'string'}}, 'field types'),
+    ('Evaluate the following stimulus', {'Valid': {'type': 'boolean'}}, 'JSON booleans'),
+    ('Rate the following stimulus', {'Fluency': {'type': 'integer', 'minimum': 0, 'maximum': 10}}, 'inclusive ranges'),
+])
+def test_response_format_matches_provider(monkeypatch, url, expected, prompt, properties, instruction):
+    post = Mock(return_value={'choices': [{'message': {'content': '{}'}}]})
+    monkeypatch.setattr(backend, 'post_public_json', post)
+    monkeypatch.setattr(backend, 'call_with_timeout', lambda func, args, kwargs, timeout: func(*args, **kwargs))
+    backend.CustomModelClient(url, 'dummy', 'test-model').generate_completion(prompt, properties, {'max_tokens': 2000, 'temperature': 0.7})
+    payload = post.call_args.args[2]
+    assert payload['response_format']['type'] == expected
+    assert payload['max_tokens'] == 2000
+    assert payload['temperature'] == 0.7
+    if expected == 'json_object':
+        message = payload['messages'][-1]['content']
+        assert json.dumps(properties, ensure_ascii=False) in message
+        assert instruction in message
+        assert 'exactly these fields' in message
+    else:
+        assert payload['response_format']['json_schema']['schema']['properties'] == properties
+
+
 def test_existing_repetition_rule_is_preserved():
     assert backend.check_stimulus_repetition({'text': 'new', 'condition': 'A'}, [{'text': 'old', 'condition': 'A'}])
     assert not backend.check_stimulus_repetition({'text': 'new'}, [{'text': 'old'}])
@@ -277,7 +307,7 @@ def test_gpt54_sampling_compatibility(monkeypatch, url, model, params, effort_ke
 def test_packaged_web_assets(client):
     response = client.get('/package-smoke')
     assert response.status_code == 200
-    assert b'openai/gpt-5.4' in response.data
+    assert b'nvidia/nemotron-3.5-super-vl:free' in response.data
     assert b'component-example-table' in response.data
     assert client.get('/static/script.js').status_code == 200
     assert client.get('/static/styles.css').status_code == 200
@@ -313,3 +343,15 @@ def test_dimension_heavy_websocket_output_stays_parseable(client):
     events = [event for event in ws.get_received() if event['name'] == 'stimulus_update']
     assert events[0]['args'][0]['message'] == message
     ws.disconnect()
+
+
+def test_json_object_property_drafting_preserves_requested_structure(monkeypatch):
+    post = Mock(return_value={'choices': [{'message': {'content': '{"criteria": {"Valid": "Requirement"}}'}}]})
+    monkeypatch.setattr(backend, 'post_public_json', post)
+    monkeypatch.setattr(backend, 'call_with_timeout', lambda func, args, kwargs, timeout: func(*args, **kwargs))
+    client = backend.CustomModelClient('https://openrouter.ai/api/v1/chat/completions', 'dummy', 'test-model')
+    result = client.generate_completion('Draft criteria and aspects as JSON', {})
+    message = post.call_args.args[2]['messages'][-1]['content']
+    assert 'exactly these fields' not in message
+    assert 'structure requested above' in message
+    assert result['criteria']['Valid'] == 'Requirement'

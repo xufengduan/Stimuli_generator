@@ -381,9 +381,11 @@ class CustomModelClient(ModelClient):
 
     def generate_completion(self, prompt, properties, params=None):
 
-        is_deepseek = self.api_url.strip().startswith("https://api.deepseek.com")
+        provider_host = urlsplit(self.api_url.strip()).hostname
+        is_deepseek = provider_host == "api.deepseek.com"
+        is_openai = provider_host == "api.openai.com"
 
-        if is_deepseek:
+        if not is_openai:
             rand_stamp = int(time.time())
             # Generate field list
             field_list = ', '.join([f'"{k}"' for k in properties.keys()])
@@ -395,18 +397,24 @@ class CustomModelClient(ModelClient):
                 value_instruction = "Use integer scores within the specified inclusive ranges. Follow each dimension's description and scale direction."
             else:
                 value_instruction = "Use the field types specified in the response schema."
-            prompt = prompt.rstrip() + (
-                f"\nReturn only a single JSON object with exactly these fields: {field_list}. "
-                f"Response schema properties: {json.dumps(properties, ensure_ascii=False)}. "
-                f"{value_instruction} Do not include Markdown code fences or explanatory text."
-            )
+            if properties:
+                prompt = prompt.rstrip() + (
+                    f"\nReturn only a single JSON object with exactly these fields: {field_list}. "
+                    f"Response schema properties: {json.dumps(properties, ensure_ascii=False)}. "
+                    f"{value_instruction} Do not include Markdown code fences or explanatory text."
+                )
+            else:
+                # Property drafting defines its own nested JSON structure in the prompt.
+                prompt = prompt.rstrip() + (
+                    "\nReturn only a single JSON object following the structure requested above. "
+                    f"{value_instruction} "
+                    "Do not include Markdown code fences or explanatory text."
+                )
 
             request_data = {
                 "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": f"RAND:{rand_stamp}"},
-                    {"role": "user", "content": prompt}
-                ],
+                "messages": ([{"role": "system", "content": f"RAND:{rand_stamp}"}] if is_deepseek else [])
+                            + [{"role": "user", "content": prompt}],
                 "stream": False,
                 "response_format": {"type": "json_object"}
             }

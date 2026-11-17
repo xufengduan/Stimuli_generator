@@ -237,7 +237,7 @@ Missing ratings are not automatically replaced with zero. Review missing values 
 2. In StimMAS, click **Custom Model**. **This clears the preset model name and API URL.** Fill in both fields again.
 3. Enter your chosen identifier in **Model name**. Keep the full provider prefix, such as `nvidia/`.
 4. Paste `https://openrouter.ai/api/v1/chat/completions` in **API URL** and use your **OpenRouter** key in **API Key**.
-5. Check the model's price, availability, and supported parameters, then run a small pilot. StimMAS needs text responses in the requested JSON format; models can differ in how reliably they follow that format.
+5. Check the model's price, availability, and supported parameters, then run a small pilot. StimMAS uses `json_object` for OpenRouter and other non-OpenAI endpoints, with field requirements in the prompt and application-side checks. Direct OpenAI requests retain `json_schema`. Models must support the selected output format. StimMAS needs text responses in the requested JSON format; models can differ in how reliably they follow that format.
 
 For example, a fully filled custom configuration for the model used in the tutorial is:
 
