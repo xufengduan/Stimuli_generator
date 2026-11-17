@@ -502,131 +502,225 @@ function handleLogMessage(type, message) {
     }
 }
 
-// Clear log function
-function clearLog(logId) {
-    const logElement = document.getElementById(logId);
-    if (logElement) {
-        logElement.innerHTML = '';
-    }
-}
-
-// Add log message to panel
-function appendLogMessage(logElement, message, className = '') {
-    // Create message container
-    const logMessage = document.createElement('div');
-
-    // Determine message type based on content and className
-    let messageType = className || 'info';
-    const lowerMessage = message.toLowerCase();
-
-    // Error messages (red)
-    if (lowerMessage.includes('error') ||
-        lowerMessage.includes('failed') ||
-        lowerMessage.includes('parsing error') ||
-        lowerMessage.includes('invalid response') ||
-        lowerMessage.includes('api error') ||
-        lowerMessage.includes('timeout')) {
-        messageType = 'error';
-    }
-    // Success messages (green)  
-    else if (lowerMessage.includes('passed') ||
-        lowerMessage.includes('completed') ||
-        lowerMessage.includes('success') ||
-        lowerMessage.includes('all criteria passed') ||
-        lowerMessage.includes('all validations passed') ||
-        lowerMessage.includes('individual scoring completed') ||
-        lowerMessage.includes('individual validation completed')) {
-        messageType = 'success';
-    }
-    // Warning messages (orange)
-    else if (lowerMessage.includes('warning') ||
-        lowerMessage.includes('early rejection') ||
-        lowerMessage.includes('regenerating') ||
-        lowerMessage.includes('failed validation') ||
-        lowerMessage.includes('stopping validation') ||
-        lowerMessage.includes('detected repeated stimulus')) {
-        messageType = 'warning';
-    }
-    // Progress messages (purple) - for step-by-step processes
-    else if (lowerMessage.includes('evaluating aspect') ||
-        lowerMessage.includes('validating criterion') ||
-        lowerMessage.includes('checking') && lowerMessage.includes('criteria') ||
-        (lowerMessage.includes('aspect') && lowerMessage.includes(':') && (lowerMessage.includes('/') || lowerMessage.includes('passed') || lowerMessage.includes('failed'))) ||
-        (lowerMessage.includes('criterion') && lowerMessage.includes(':') && (lowerMessage.includes('passed') || lowerMessage.includes('failed')))) {
-        messageType = 'progress';
-    }
-    // Info messages (blue) - for general information
-    else if (lowerMessage.includes('using individual') ||
-        lowerMessage.includes('using batch') ||
-        lowerMessage.includes('mode') ||
-        lowerMessage.includes('properties:') ||
-        lowerMessage.includes('starting') ||
-        lowerMessage.includes('output:')) {
-        messageType = 'info';
-    }
-
-    logMessage.className = `log-message ${messageType}`;
-
-    // Add timestamp
-    const timestamp = new Date().toLocaleTimeString();
-    const timestampElement = document.createElement('div');
-    timestampElement.className = 'log-timestamp';
-    timestampElement.textContent = timestamp;
-
-    // Create text container
-    const textElement = document.createElement('div');
-    textElement.className = 'log-text';
-
-    // Format message content with icons
-    let messageIcon = '';
-    if (messageType === 'success') {
-        messageIcon = '<i class="fas fa-check-circle" style="color: #4CAF50; margin-right: 6px;"></i>';
-    } else if (messageType === 'error') {
-        messageIcon = '<i class="fas fa-exclamation-triangle" style="color: #f44336; margin-right: 6px;"></i>';
-    } else if (messageType === 'warning') {
-        messageIcon = '<i class="fas fa-exclamation-circle" style="color: #FF9800; margin-right: 6px;"></i>';
-    } else if (messageType === 'progress') {
-        messageIcon = '<i class="fas fa-cog fa-spin" style="color: #9C27B0; margin-right: 6px;"></i>';
-    } else if (messageType === 'info') {
-        messageIcon = '<i class="fas fa-info-circle" style="color: #2196F3; margin-right: 6px;"></i>';
-    }
-
-    // Format message content
-    if (message.includes('=== No.')) {
-        // Use special style for round information
-        textElement.innerHTML = `${messageIcon}<span class="message-round">${escapeLogHtml(message)}</span>`;
-    } else if (message.includes('Output:')) {
-        // Agent output, try to format JSON
+// Parse output before classifying it: words inside generated stimuli are not statuses.
+function parseLogEntry(message, className = '') {
+    const text = String(message ?? '');
+    const round = text.trim().match(/^===\s*No\.\s*(\d+)\s+Round\s*===$/i);
+    if (round) return {kind: 'round', round: round[1], text};
+    const output = text.match(/^(Generator|Validator|Scorer)'s Output:\s*([\s\S]*)$/i);
+    if (output) {
         try {
-            const parts = message.split('Output:');
-            const prefix = parts[0];
-            const jsonText = parts[1].trim();
-
-            // Try to format JSON (horizontal format with colors)
-            if (jsonText.startsWith('{') && jsonText.endsWith('}')) {
-                const coloredJson = formatJsonHorizontal(jsonText);
-                textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(prefix)}Output: ${coloredJson}</span>`;
-            } else {
-                textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
+            const data = JSON.parse(output[2]);
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                return {kind: 'output', agent: output[1].toLowerCase(), data, text};
             }
-        } catch (e) {
-            textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
+        } catch (_) {
+            // Truncated or malformed provider output stays visible as plain text.
         }
-    } else {
-        // General message
-        textElement.innerHTML = `${messageIcon}<span class="message-output">${escapeLogHtml(message)}</span>`;
+        return {kind: 'message', status: 'info', text};
     }
-
-    // Append timestamp and text to message container
-    logMessage.appendChild(timestampElement);
-    logMessage.appendChild(textElement);
-
-    // Add to log panel
-    logElement.appendChild(logMessage);
-
-    // Scroll to bottom
-    logElement.scrollTop = logElement.scrollHeight;
+    const lower = text.toLowerCase();
+    let status = className || 'info';
+    if (!className) {
+        if (/warning|early rejection|regenerating|detected repeated stimulus/.test(lower)) status = 'warning';
+        else if (/error|failed|invalid response|timeout/.test(lower)) status = 'error';
+        else if (/passed|completed|success/.test(lower)) status = 'success';
+        else if (/evaluating aspect|validating criterion|checking.*criteria/.test(lower)) status = 'progress';
+    }
+    if (!['info', 'success', 'error', 'warning', 'progress'].includes(status)) status = 'info';
+    return {kind: 'message', status, text};
 }
+
+// Dynamic text is always assigned with textContent, including model keys and values.
+function createLogNode(tag, className, text) {
+    const node = document.createElement(tag);
+    node.className = className;
+    if (text !== undefined) node.textContent = String(text);
+    return node;
+}
+
+function getAgentLogState() {
+    if (!globalThis.agentLogState) globalThis.agentLogState = {records: {}, current: {}, selected: 'all', followItem: true, filter: 'all', raw: false, itemSignature: ''};
+    return globalThis.agentLogState;
+}
+
+function getLogItemIds() {
+    return [...new Set(Object.values(getAgentLogState().records).flat().map(record => record.item).filter(item => item !== null))].sort((a, b) => a - b);
+}
+
+function readLogScoreRanges() {
+    const ranges = {};
+    const table = document.getElementById('agent3PropertiesTable');
+    if (table) for (const row of Array.from(table.rows).slice(1)) {
+        const inputs = row.querySelectorAll('input');
+        if (inputs.length < 4) continue;
+        const key = inputs[0].value.trim(), min = inputs[2].value.trim(), max = inputs[3].value.trim();
+        if (key && min !== '' && max !== '' && Number.isFinite(Number(min)) && Number.isFinite(Number(max))) ranges[key] = {min: Number(min), max: Number(max)};
+    }
+    return ranges;
+}
+
+function getLogRecordStatus(record) {
+    const entry = record.entry;
+    if (entry.kind !== 'output') return entry.status || 'info';
+    if ('error' in entry.data) return 'error';
+    const values = Object.values(entry.data);
+    if (!values.length) return 'warning';
+    if (entry.agent === 'validator' && values.some(value => value !== true)) return 'warning';
+    if (entry.agent === 'scorer' && values.some(value => typeof value !== 'number' || !Number.isFinite(value))) return 'warning';
+    return 'success';
+}
+
+function logRecordMatches(record, selected, filter) {
+    if (selected !== 'all' && record.item !== null && String(record.item) !== selected) return false;
+    if (filter === 'outputs') return record.entry.kind === 'output';
+    if (filter === 'warnings') return getLogRecordStatus(record) === 'warning';
+    if (filter === 'errors') return getLogRecordStatus(record) === 'error';
+    return true;
+}
+
+function createTimelineRecord(record, panelId, raw) {
+    const entry = record.entry, status = getLogRecordStatus(record);
+    const event = createLogNode('div', `timeline-event ${status}`);
+    const time = createLogNode('time', 'timeline-time', new Date(record.timestamp).toLocaleTimeString());
+    time.dateTime = record.timestamp;
+    const dot = createLogNode('span', 'timeline-dot', status === 'success' ? '✓' : status === 'error' ? '!' : status === 'warning' ? '!' : '');
+    dot.setAttribute('aria-hidden', 'true');
+    const body = createLogNode('div', 'timeline-body');
+    event.append(time, dot, body);
+    if (raw) {
+        body.append(createLogNode('pre', 'timeline-raw', entry.text));
+        return event;
+    }
+    if (entry.kind === 'round') {
+        const verb = panelId === 'generator-log' ? 'Generating' : panelId === 'validator-log' ? 'Validating' : 'Scoring';
+        body.append(createLogNode('div', 'timeline-message', `${verb} item ${entry.round} …`));
+        return event;
+    }
+    if (entry.kind !== 'output') {
+        body.append(createLogNode('div', 'timeline-message', entry.text));
+        return event;
+    }
+    const item = record.item === null ? 'Item' : `Item ${record.item}`;
+    const values = Object.values(entry.data);
+    let title = entry.agent === 'generator' ? `${item} generated` : `${item} scored`;
+    if (entry.agent === 'validator') {
+        const passed = values.filter(value => value === true).length;
+        title = values.length && passed === values.length ? 'All validations passed' : `${passed}/${values.length} criteria passed`;
+    }
+    body.append(createLogNode('div', 'timeline-output-title', title));
+    const fields = createLogNode('div', `timeline-fields timeline-${entry.agent}`);
+    for (const [key, value] of Object.entries(entry.data)) {
+        const field = createLogNode('div', 'timeline-field');
+        const label = createLogNode('div', 'timeline-field-label', key);
+        const displayed = value === null ? 'Not available' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+        const content = createLogNode('div', 'timeline-field-value', displayed);
+        if (entry.agent === 'validator') {
+            const valid = typeof value === 'boolean';
+            field.classList.add(valid && value ? 'passed' : 'not-passed');
+            const mark = createLogNode('span', 'timeline-verdict-mark', valid ? value ? '✓' : '✕' : '?');
+            mark.setAttribute('aria-label', valid ? value ? 'Passed' : 'Not passed' : 'Invalid result');
+            field.append(mark, label);
+            if (!valid) field.append(content);
+        } else {
+            field.append(label, content);
+            if (entry.agent === 'scorer' && typeof value === 'number') {
+                content.classList.add('timeline-score');
+                const range = record.ranges[key];
+                if (range) {
+                    content.append(createLogNode('span', 'timeline-score-max', ` /${range.max}`));
+                    content.title = `Configured scale: ${range.min}–${range.max}`;
+                }
+            }
+            if (value === null) content.classList.add('is-missing');
+        }
+        fields.append(field);
+    }
+    if (!values.length) fields.append(createLogNode('div', 'is-missing', 'No fields returned.'));
+    body.append(fields);
+    return event;
+}
+
+function updateLogControls() {
+    const state = getAgentLogState(), ids = getLogItemIds();
+    const select = document.getElementById('log-item-select');
+    const signature = ids.join(',');
+    if (state.selected !== 'all' && !ids.includes(Number(state.selected))) state.selected = 'all';
+    if (select) {
+        if (state.itemSignature !== signature || select.options.length !== ids.length + 1) {
+            select.replaceChildren(createLogNode('option', '', 'All items'));
+            select.options[0].value = 'all';
+            for (const id of ids) { const option = createLogNode('option', '', `Item ${id}`); option.value = String(id); select.append(option); }
+            state.itemSignature = signature;
+        }
+        select.value = state.selected;
+    }
+    const index = ids.indexOf(Number(state.selected));
+    const previous = document.getElementById('log-previous-item'), next = document.getElementById('log-next-item');
+    if (previous) previous.disabled = !ids.length || (state.selected !== 'all' && index <= 0);
+    if (next) next.disabled = !ids.length || (state.selected !== 'all' && index >= ids.length - 1);
+}
+
+function renderAgentLogs() {
+    const state = getAgentLogState();
+    updateLogControls();
+    for (const id of ['generator-log', 'validator-log', 'scorer-log']) {
+        const log = document.getElementById(id);
+        if (!log) continue;
+        const follow = log.scrollHeight - log.scrollTop - log.clientHeight < 48, previousTop = log.scrollTop;
+        const selected = (state.records[id] || []).filter(record => state.selected === 'all' || record.item === null || String(record.item) === state.selected);
+        const visible = selected.filter(record => logRecordMatches(record, state.selected, state.filter));
+        log.replaceChildren(...visible.map(record => createTimelineRecord(record, id, state.raw)));
+        if (!visible.length) log.append(createLogNode('div', 'timeline-empty', selected.length ? 'No events match this filter.' : 'Waiting for activity…'));
+        log.scrollTop = follow ? log.scrollHeight : previousTop;
+        const badge = document.getElementById(id + '-status');
+        if (badge) {
+            const latest = selected[selected.length - 1];
+            let status = latest ? getLogRecordStatus(latest) : 'ready';
+            const latestOutput = selected.filter(record => record.entry.kind === 'output').at(-1);
+            if (status === 'success' && latestOutput && getLogRecordStatus(latestOutput) !== 'success') status = getLogRecordStatus(latestOutput);
+            let label = {ready: 'Ready', success: 'Completed', info: 'In progress', progress: 'In progress', warning: 'Needs attention', error: 'Error'}[status];
+            if (latest && /stopped|stopping/i.test(latest.entry.text) && latest.entry.kind !== 'output') label = 'Stopped';
+            badge.className = `agent-log-status ${status}`;
+            badge.textContent = label;
+        }
+    }
+    updateLogControls();
+}
+
+function appendLogMessage(logElement, message, className = '') {
+    if (!logElement) return;
+    const state = getAgentLogState(), id = logElement.id;
+    const entry = parseLogEntry(message, className);
+    if (entry.kind === 'round') {
+        state.current[id] = Number(entry.round);
+        if (state.followItem) state.selected = String(entry.round);
+    }
+    const record = {entry, item: state.current[id] ?? null, timestamp: new Date().toISOString(), ranges: entry.kind === 'output' && entry.agent === 'scorer' ? readLogScoreRanges() : {}};
+    (state.records[id] ||= []).push(record);
+    renderAgentLogs();
+}
+
+function clearLog(logId) {
+    const state = getAgentLogState();
+    delete state.records[logId]; // Preserve the active item for messages arriving after Clear.
+    renderAgentLogs();
+}
+
+function selectLogItem(value) {
+    const state = getAgentLogState(); state.selected = value; state.followItem = false;
+    renderAgentLogs();
+}
+
+function navigateLogItem(direction) {
+    const ids = getLogItemIds(), selected = getAgentLogState().selected;
+    const index = selected === 'all' ? direction > 0 ? -1 : ids.length : ids.indexOf(Number(selected));
+    const next = ids[index + direction];
+    if (next !== undefined) selectLogItem(String(next));
+}
+
+function setLogFilter(value) { getAgentLogState().filter = value; renderAgentLogs(); }
+function setRawLogs(value) { getAgentLogState().raw = value; renderAgentLogs(); }
 
 // Format JSON string (multi-line version)
 function formatJson(jsonString) {
@@ -729,9 +823,9 @@ function formatJsonHorizontal(jsonString) {
 
 // Clear log display area
 function clearLogs() {
-    generatorLog.innerHTML = '';
-    validatorLog.innerHTML = '';
-    scorerLog.innerHTML = '';
+    const state = getAgentLogState();
+    state.records = {}; state.current = {}; state.selected = 'all'; state.followItem = true;
+    renderAgentLogs();
 }
 
 // Get API URL prefix with session ID

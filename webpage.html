@@ -404,50 +404,56 @@
                 </div>
             </div>
         </div>
-        <!-- Add output log area -->
-        <h2>Generation Log</h2>
-        <div class="pale-blue-section">
-            <div class="log-container">
-                <div class="log-panel">
-                    <div class="log-header">
-                        <div class="log-header-left">
-                            <i class="fas fa-lightbulb agent-icon generator-icon"></i>
-                            <h3>Generator</h3>
-                        </div>
-                        <button class="log-clear-btn" onclick="clearLog('generator-log')">
-                            <i class="fas fa-trash-alt"></i> Clear
-                        </button>
+        <section class="agent-logs-section" aria-labelledby="agent-logs-title">
+            <div class="agent-logs-toolbar">
+                <div class="agent-logs-heading"><span class="logs-terminal" aria-hidden="true">›_</span><div>
+                    <h2 id="agent-logs-title">Agent Logs</h2>
+                    <p>Real-time activity of the multi-agent stimulus generation process.</p>
+                </div></div>
+                <div class="agent-log-controls">
+                    <div class="log-item-navigation">
+                        <button type="button" id="log-previous-item" disabled aria-label="Previous item" onclick="navigateLogItem(-1)">‹</button>
+                        <select id="log-item-select" aria-label="Select stimulus item" onchange="selectLogItem(this.value)"><option value="all">All items</option></select>
+                        <button type="button" id="log-next-item" disabled aria-label="Next item" onclick="navigateLogItem(1)">›</button>
                     </div>
-                    <div class="log-content" id="generator-log"></div>
-                </div>
-
-                <div class="log-panel">
-                    <div class="log-header">
-                        <div class="log-header-left">
-                            <i class="fas fa-check-circle agent-icon validator-icon"></i>
-                            <h3>Validator</h3>
-                        </div>
-                        <button class="log-clear-btn" onclick="clearLog('validator-log')">
-                            <i class="fas fa-trash-alt"></i> Clear
-                        </button>
-                    </div>
-                    <div class="log-content" id="validator-log"></div>
-                </div>
-
-                <div class="log-panel">
-                    <div class="log-header">
-                        <div class="log-header-left">
-                            <i class="fas fa-star agent-icon scorer-icon"></i>
-                            <h3>Scorer</h3>
-                        </div>
-                        <button class="log-clear-btn" onclick="clearLog('scorer-log')">
-                            <i class="fas fa-trash-alt"></i> Clear
-                        </button>
-                    </div>
-                    <div class="log-content" id="scorer-log"></div>
+                    <select id="log-event-filter" aria-label="Filter log events" onchange="setLogFilter(this.value)">
+                        <option value="all">All events</option><option value="outputs">Outputs only</option>
+                        <option value="warnings">Warnings &amp; retries</option><option value="errors">Errors only</option>
+                    </select>
+                    <label class="raw-log-control"><span>Raw logs</span><input id="log-raw-toggle" type="checkbox" role="switch" onchange="setRawLogs(this.checked)"><span class="raw-log-switch" aria-hidden="true"></span></label>
+                    <span class="log-toolbar-note" title="Raw logs show the original received messages. Item selection applies to all three agents." aria-label="Raw logs show original messages; item selection applies to all agents.">ⓘ</span>
                 </div>
             </div>
-        </div>
+            <div class="log-container">
+                <div class="log-panel" data-agent="generator">
+                    <div class="log-header"><div class="log-header-left">
+                        <i class="fas fa-lightbulb agent-icon generator-icon" aria-hidden="true"></i>
+                        <h3>Generator</h3><span class="agent-log-description">Generate stimulus components and contexts</span>
+                    </div><div class="log-header-actions"><span id="generator-log-status" class="agent-log-status ready">Ready</span>
+                        <button type="button" class="log-clear-btn" onclick="clearLog('generator-log')"><i class="fas fa-trash-alt" aria-hidden="true"></i> Clear</button>
+                    </div></div>
+                    <div class="log-content" id="generator-log" aria-label="Generator activity"></div>
+                </div>
+                <div class="log-panel" data-agent="validator">
+                    <div class="log-header"><div class="log-header-left">
+                        <i class="fas fa-check-circle agent-icon validator-icon" aria-hidden="true"></i>
+                        <h3>Validator</h3><span class="agent-log-description">Check linguistic and design constraints</span>
+                    </div><div class="log-header-actions"><span id="validator-log-status" class="agent-log-status ready">Ready</span>
+                        <button type="button" class="log-clear-btn" onclick="clearLog('validator-log')"><i class="fas fa-trash-alt" aria-hidden="true"></i> Clear</button>
+                    </div></div>
+                    <div class="log-content" id="validator-log" aria-label="Validator activity"></div>
+                </div>
+                <div class="log-panel" data-agent="scorer">
+                    <div class="log-header"><div class="log-header-left">
+                        <i class="fas fa-star agent-icon scorer-icon" aria-hidden="true"></i>
+                        <h3>Scorer</h3><span class="agent-log-description">Evaluate each configured scoring dimension</span>
+                    </div><div class="log-header-actions"><span id="scorer-log-status" class="agent-log-status ready">Ready</span>
+                        <button type="button" class="log-clear-btn" onclick="clearLog('scorer-log')"><i class="fas fa-trash-alt" aria-hidden="true"></i> Clear</button>
+                    </div></div>
+                    <div class="log-content" id="scorer-log" aria-label="Scorer activity"></div>
+                </div>
+            </div>
+        </section>
     </div>
     <script src="/static/script.js"></script>
 </body>

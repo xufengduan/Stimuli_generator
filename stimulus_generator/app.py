@@ -252,9 +252,13 @@ def websocket_send(session_id, message_type, message):
         if not session_id:
             return
 
-        # Truncate long messages
-        if isinstance(message, str) and len(message) > 1000:
-            message_preview = message[:1000] + "... [truncated]"
+        # Dimension-heavy JSON outputs need more room than ordinary status text.
+        # Keep a bounded payload and let the frontend show a plain-text fallback
+        # if an exceptionally large output still needs truncation.
+        structured = isinstance(message, str) and re.match(r"^(Generator|Validator|Scorer)'s Output:", message)
+        message_limit = 65536 if structured else 1000
+        if isinstance(message, str) and len(message) > message_limit:
+            message_preview = message[:message_limit] + "... [truncated]"
         else:
             message_preview = message
 

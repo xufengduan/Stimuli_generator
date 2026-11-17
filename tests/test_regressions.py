@@ -299,3 +299,17 @@ def test_prefilled_params_work_with_reference_models(monkeypatch, url, model, to
     if token_key == 'max_completion_tokens':
         assert 'max_tokens' not in payload
     assert params == {'max_tokens': 2000, 'temperature': 0.7}
+
+
+
+def test_dimension_heavy_websocket_output_stays_parseable(client):
+    ws = web.socketio.test_client(web.app)
+    ws.emit('join_session', {'session_id': 'many-dimensions'})
+    ws.get_received()
+    dimensions = {f'Validation criterion {i}': True for i in range(80)}
+    message = "Validator's Output: " + json.dumps(dimensions)
+    assert len(message) > 1000
+    web.websocket_send('many-dimensions', 'validator', message)
+    events = [event for event in ws.get_received() if event['name'] == 'stimulus_update']
+    assert events[0]['args'][0]['message'] == message
+    ws.disconnect()
