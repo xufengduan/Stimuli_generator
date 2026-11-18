@@ -58,3 +58,45 @@ assert.equal(context.logRecordMatches({entry: context.parseLogEntry('API error')
 context.getAgentLogState().records = {'generator-log': [{item: 10}, {item: 2}, {item: null}], 'validator-log': [{item: 2}]};
 assert.deepEqual(Array.from(context.getLogItemIds()), [2, 10]);
 console.log('Frontend checks passed: safe timelines, filtering, item IDs, raw messages, verdicts and real score ranges');
+
+for (const name of ['exampleRows', 'collectExampleStimuli', 'collectItemsData', 'collectGeneratorConfiguration', 'validateExampleItems']) {
+  const start = source.indexOf(`function ${name}(`);
+  const end = source.indexOf('\n}', start) + 2;
+  vm.runInContext(source.slice(start, end), context);
+}
+const exampleRow = (name, value) => ({querySelector: selector => ({value: selector === '.example-name' ? name : value, focus() {}})});
+const exampleItem = (elements, conditions) => ({querySelectorAll: selector => selector.includes('"element"') ? elements : conditions});
+context.alert = () => {};
+context.itemsContainer = {
+  children: [
+    exampleItem([exampleRow('目标词', '花园'), exampleRow('', '')], [exampleRow('条件甲', '她走进花园。'), exampleRow('条件乙', '花园里开满了花。')]),
+    exampleItem([exampleRow('目标词', '学校'), exampleRow('', '')], [exampleRow('条件甲', '他走进学校。'), exampleRow('条件乙', '学校里有很多学生。')])
+  ],
+  get firstElementChild() { return this.children[0]; }
+};
+assert.equal(context.validateExampleItems(), true);
+const examples = JSON.parse(JSON.stringify(context.collectItemsData()));
+assert.deepEqual(Object.keys(examples[0]), ['目标词', '条件甲', '条件乙']);
+assert.equal(examples[1]['目标词'], '学校');
+const configuration = context.collectGeneratorConfiguration();
+assert.deepEqual(Object.keys(configuration.properties), ['目标词', '条件甲', '条件乙']);
+assert.deepEqual(Array.from(configuration.avoidDuplicationFields), ['目标词']);
+assert(configuration.properties['目标词'].description.includes('unique'));
+context.itemsContainer.children = [
+  exampleItem([exampleRow('目标词', '花园')], [exampleRow('条件甲', '第一份')]),
+  exampleItem([exampleRow('名字', '小乙')], [exampleRow('条件乙', '第二份')])
+];
+assert.equal(context.validateExampleItems(), true);
+const independentConfiguration = context.collectGeneratorConfiguration();
+assert.deepEqual(Object.keys(independentConfiguration.properties), ['目标词', '名字', '条件甲', '条件乙']);
+assert.deepEqual(Array.from(independentConfiguration.avoidDuplicationFields), ['目标词', '名字']);
+assert.deepEqual(Object.keys(context.collectItemsData()[0]), ['目标词', '条件甲']);
+assert.deepEqual(Object.keys(context.collectItemsData()[1]), ['名字', '条件乙']);
+context.itemsContainer.children = [exampleItem([], [exampleRow('__proto__', 'Chinese 中文')])];
+assert.equal(context.validateExampleItems(), true);
+assert.equal(Object.hasOwn(context.collectItemsData()[0], '__proto__'), true);
+context.itemsContainer.children = [exampleItem([exampleRow('same', 'value')], [exampleRow('same', 'sentence')])];
+assert.equal(context.validateExampleItems(), false, 'Do not silently overwrite a condition with an element');
+context.itemsContainer.children = [exampleItem([exampleRow('目标词', '')], [exampleRow('条件', '内容')])];
+assert.equal(context.validateExampleItems(), false, 'An optional element must be complete when used');
+console.log('Example checks passed: element order, per-item values, optional rows, schema, duplicate names and safe keys');

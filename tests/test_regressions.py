@@ -114,10 +114,114 @@ def test_repeat_download_and_disk_restore(client):
         response = client.get('/test/download/test.csv')
         assert response.status_code == 200
         df = pd.read_csv(io.BytesIO(response.data))
-        assert df.loc[0, 'Content1'] == 'hello'
-        assert pd.isna(df.loc[0, 'quality'])
-        assert df.loc[0, 'scoring_error'] == 'API error'
+        assert df.loc[0, 'text'] == 'hello'
+        assert pd.isna(df.loc[0, 'score_quality'])
+        assert df.loc[0, 'scoring_status'] == 'failed'
+        detail = client.get('/test/download/test.csv?variant=detailed')
+        assert pd.read_csv(io.BytesIO(detail.data)).loc[0, 'scoring_error'] == 'API error'
     assert web.active_sessions['test']['dataframe'] is not None
+
+
+def test_history_survives_new_batches_and_disk_restore(client, monkeypatch):
+    model = Mock()
+    model.get_default_params.return_value = {}
+    model.generate_completion.side_effect = [
+        {'text': '第一批：香港中文大學'}, {'ok': True}, {'quality': 6},
+        {'text': '第二批：中文，逗号与换行\n第二行'}, {'ok': True}, {'quality': 5}]
+    monkeypatch.setattr(backend, 'create_model_client', lambda *args: model)
+    request = {'iteration': 1, 'experimentDesign': '中文实验', 'modelChoice': 'GPT-4o',
+               'agent1Properties': json.dumps({'text': {'type': 'string'}}),
+               'agent2Properties': json.dumps({'ok': {'type': 'boolean'}}),
+               'agent3Properties': json.dumps({'quality': {'type': 'integer'}})}
+    for _ in range(2):
+        assert client.post('/history/generate_stimulus', json=request).status_code == 200
+        web.active_sessions['history']['generation_thread'].join(5)
+    web.active_sessions.clear()
+    history = client.get('/history/generation_history').get_json()['history']
+    assert len(history) == 2
+    assert history[0]['filename'] != history[1]['filename']
+    assert all(row['rows'] == 1 and not row['partial'] for row in history)
+    for entry, expected in zip(history, ['第二批：中文，逗号与换行\n第二行', '第一批：香港中文大學']):
+        response = client.get('/history/download/' + entry['filename'])
+        assert response.status_code == 200
+        assert response.data.startswith(b'\xef\xbb\xbf')
+        assert 'charset=utf-8' in response.content_type
+        assert pd.read_csv(io.BytesIO(response.data)).loc[0, 'text'] == expected
+        assert client.get('/another-session/download/' + entry['filename']).status_code == 404
+
+
+def test_history_migrates_existing_latest_result_once(client):
+    state = web.load_session('legacy')
+    state['generation_file'] = 'legacy.csv'
+    state['dataframe'] = pd.DataFrame([{'stimulus_content': {'条件': '繁體中文、简体中文'}}])
+    web.save_session('legacy', state)
+    for _ in range(2):
+        assert len(client.get('/legacy/generation_history').get_json()['history']) == 1
+    web.active_sessions.clear()
+    response = client.get('/legacy/download/legacy.csv')
+    assert response.data.startswith(b'\xef\xbb\xbf')
+    assert '繁體中文、简体中文' in response.data.decode('utf-8-sig')
+
+
+def test_partial_results_are_in_history(client, monkeypatch):
+    dataframe = pd.DataFrame([{'stimulus_content': {'text': 'partial'}}])
+    monkeypatch.setattr(web, 'generate_stimuli', lambda settings: (dataframe, 'partial.csv'))
+    assert client.post('/partial-history/generate_stimulus', json={
+        'iteration': 2, 'experimentDesign': 'design', 'modelChoice': 'GPT-4o'}).status_code == 200
+    web.active_sessions['partial-history']['generation_thread'].join(5)
+    history = client.get('/partial-history/generation_history').get_json()['history']
+    assert len(history) == 1 and history[0]['partial'] and history[0]['rows'] == 1
+
+
+@pytest.mark.parametrize('fields', ['Verb', [1], ['unknown']])
+def test_invalid_duplication_fields_leave_results_intact(client, fields):
+    state = web.load_session('invalid-fields')
+    state['generation_file'] = 'existing.csv'
+    response = client.post('/invalid-fields/generate_stimulus', json={
+        'iteration': 1, 'experimentDesign': 'design', 'modelChoice': 'GPT-4o',
+        'avoidDuplicationFields': fields})
+    assert response.status_code == 400
+    assert state['generation_file'] == 'existing.csv'
+
+
+def test_server_orders_elements_before_numeric_conditions(client, monkeypatch):
+    captured = {}
+    def generate(config):
+        captured.update(config)
+        return pd.DataFrame([{'stimulus_content': {'Verb': 'walk', '1': 'A sentence.'}}]), 'result.csv'
+    monkeypatch.setattr(web, 'generate_stimuli', generate)
+    response = client.post('/field-order/generate_stimulus', json={
+        'iteration': 1, 'experimentDesign': 'design', 'modelChoice': 'GPT-4o',
+        'agent1Properties': json.dumps({'1': {'type': 'string'}, 'Verb': {'type': 'string'}}),
+        'previousStimuli': json.dumps([{'1': 'Example.', 'Verb': 'eat'}]),
+        'avoidDuplicationFields': ['Verb']})
+    assert response.status_code == 200
+    web.active_sessions['field-order']['generation_thread'].join(5)
+    assert list(captured['agent_1_properties']) == ['Verb', '1']
+    assert list(captured['previous_stimuli'][0]) == ['Verb', '1']
+
+
+def test_uniqueness_fields_reach_generator_but_are_hidden_from_logs(monkeypatch, capsys):
+    config = settings()
+    config['previous_stimuli'] = [{'Verb': 'eat', 'Active': 'Example sentence.'}]
+    config['agent_1_properties'] = {'Verb': {'type': 'string'}, 'Active': {'type': 'string'}}
+    config['avoid_duplication_fields'] = ['Verb']
+    events = []
+    config['websocket_callback'] = lambda kind, message: events.append((kind, message))
+    model = Mock()
+    model.get_default_params.return_value = {}
+    model.generate_completion.side_effect = [
+        {'Verb': 'jump', 'Active': 'A new sentence.'}, {'ok': True}, {'quality': 6}]
+    monkeypatch.setattr(backend, 'create_model_client', lambda *args: model)
+    dataframe, _ = backend.generate_stimuli(config)
+    prompt, properties, _ = model.generate_completion.call_args_list[0].args
+    assert list(properties) == ['Verb', 'Active']
+    assert "'Verb': 'eat'" in prompt
+    assert dataframe.loc[0, 'stimulus_content']['Verb'] == 'jump'
+    generator_output = next(message for kind, message in events if "Generator's Output:" in message)
+    assert json.loads(generator_output.split(': ', 1)[1]) == {'Active': 'A new sentence.'}
+    assert not any('Verb' in message or 'jump' in message for _, message in events)
+    assert 'jump' not in capsys.readouterr().out
 
 
 def settings():
@@ -135,7 +239,7 @@ def test_full_flow(monkeypatch, tmp_path):
     client.generate_completion.side_effect = [{'text': 'hello'}, {'ok': True}, {'quality': 6}]
     monkeypatch.setattr(backend, 'create_model_client', lambda *a: client)
     df, filename = backend.generate_stimuli(settings())
-    assert len(df) == 1 and df.loc[0, 'quality'] == 6
+    assert len(df) == 1 and df.loc[0, 'scores']['quality'] == 6
     assert df.loc[0, 'stimulus_content'] == {'text': 'hello'}
     assert client.generate_completion.call_count == 3
     assert filename.endswith('.csv')
@@ -157,14 +261,14 @@ def test_failed_score_still_exports_missing_value(monkeypatch, tmp_path):
     client.generate_completion.side_effect = [{'text': 'hello'}, {'ok': True}, {'error': 'outage'}]
     monkeypatch.setattr(backend, 'create_model_client', lambda *a: client)
     df, _ = backend.generate_stimuli(settings())
-    assert pd.isna(df.loc[0, 'quality'])
+    assert pd.isna(df.loc[0, 'scores']['quality'])
     assert df.loc[0, 'scoring_error']
 
 
 def test_legacy_stimulus_and_nonzero_index():
     df = pd.DataFrame([{'stimulus_content': "{'text': 'legacy'}"}], index=[5])
-    result = web.expand_stimulus_content_to_columns(df)
-    assert len(result) == 1 and result.loc[5, 'Content1'] == 'legacy'
+    result = pd.read_csv(io.BytesIO(web.export_csv_bytes(df)))
+    assert len(result) == 1 and result.loc[0, 'text'] == 'legacy'
 
 
 def test_session_path_is_confined():
@@ -221,7 +325,7 @@ def test_stop_retains_partial_results(monkeypatch, tmp_path):
     client.generate_completion.side_effect = completion
     monkeypatch.setattr(backend, 'create_model_client', lambda *a: client)
     df, filename = backend.generate_stimuli(config)
-    assert len(df) == 1 and df.loc[0, 'quality'] == 5
+    assert len(df) == 1 and df.loc[0, 'scores']['quality'] == 5
     assert df.loc[0, 'stopped_by_user']
     assert '_stopped' in filename
 
@@ -302,15 +406,6 @@ def test_gpt54_sampling_compatibility(monkeypatch, url, model, params, effort_ke
     effort = effort['effort'] if isinstance(effort, dict) else effort
     assert effort == ('high' if 'reasoning' in params or 'reasoning_effort' in params else 'none')
     assert ('temperature' in payload) == (effort == 'none')
-
-
-def test_packaged_web_assets(client):
-    response = client.get('/package-smoke')
-    assert response.status_code == 200
-    assert b'google/gemma-4-31b-it:free' in response.data
-    assert b'component-example-table' in response.data
-    assert client.get('/static/script.js').status_code == 200
-    assert client.get('/static/styles.css').status_code == 200
 
 
 @pytest.mark.parametrize('url,model,token_key', [

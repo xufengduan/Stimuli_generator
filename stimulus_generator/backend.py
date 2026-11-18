@@ -1061,10 +1061,13 @@ def generate_stimuli(settings):
     record_list = []
     rejected_stimuli_memory = []
     agent_1_properties = settings.get('agent_1_properties', {})
-    print("Agent 1 Properties:", agent_1_properties)
+    avoid_duplication_fields = set(settings.get('avoid_duplication_fields', []))
+    visible_properties = {key: value for key, value in agent_1_properties.items()
+                          if key not in avoid_duplication_fields}
+    print("Agent 1 Properties:", visible_properties)
     if websocket_callback:
         websocket_callback(
-            "setup", f"Agent 1 Properties: {agent_1_properties}")
+            "setup", f"Agent 1 Properties: {visible_properties}")
 
     if check_stop():
         return None, None
@@ -1130,6 +1133,8 @@ def generate_stimuli(settings):
         # Step 1: Generate stimulus
         current_retry_count = 0  # Retry counter for this iteration
         attempt_count = 0
+        repetition_start = repetition_count
+        validation_start = validation_fails
         while True:
             attempt_count += 1
             if attempt_count > 50:
@@ -1164,10 +1169,12 @@ def generate_stimuli(settings):
                             "generator", "Generator returned ERROR, regenerating...")
                     continue
 
-                print("Agent 1 Output:", stimuli)
+                visible_stimuli = {key: value for key, value in stimuli.items()
+                                   if key not in avoid_duplication_fields}
+                print("Agent 1 Output:", visible_stimuli)
                 if websocket_callback:
                     websocket_callback(
-                        "generator", f"Generator's Output: {json.dumps(stimuli, indent=2)}")
+                        "generator", f"Generator's Output: {json.dumps(visible_stimuli, ensure_ascii=False, indent=2)}")
 
                 stopped, partial_result = check_stop_and_return(
                     "Generation stopped after 'Generator'.")
@@ -1416,12 +1423,15 @@ def generate_stimuli(settings):
             record = {
                 "stimulus_id": iteration_num + 1,
                 "stimulus_content": stimuli,
-                "repetition_count": repetition_count,
-                "validation_fails": validation_fails,
-                "validation_failure_reasons": validation_result
+                "generation_attempts": attempt_count,
+                "repetition_retries": repetition_count - repetition_start,
+                "validation_retries": validation_fails - validation_start,
+                "cumulative_repetition_retries": repetition_count,
+                "cumulative_validation_retries": validation_fails,
+                "validation_results": validation_result if ablation["use_agent_2"] else {}
             }
             if ablation["use_agent_3"]:
-                record.update(scores or {})
+                record["scores"] = scores or {}
                 if any(value is None for value in scores.values()):
                     record["scoring_error"] = "One or more scores could not be obtained or failed schema validation"
             record_list.append(record)

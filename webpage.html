@@ -27,6 +27,7 @@
                 <h1>StimMAS</h1>
                 <p class="instruction-text">Multi-agent AI for psychological stimulus generation.</p>
             </div>
+            <img class="cuhk-logo" src="/static/images/cuhk-logo.png" alt="The Chinese University of Hong Kong — 香港中文大學" decoding="async">
             <div class="header-waves" aria-hidden="true">
                 <div class="header-wave-layer"><svg viewBox="0 0 1200 130" preserveAspectRatio="none"><path d="M0 30C230 60 250 120 490 85S725 140 935 55 1080 15 1200 35V200H0Z" fill="#dcecff"/></svg></div>
                 <div class="header-wave-layer"><svg viewBox="0 0 1200 130" preserveAspectRatio="none"><path d="M0 75C250 115 320 75 505 100S790 125 960 65 1110 45 1200 70V200H0Z" fill="#eaf3ff"/></svg></div>
@@ -49,7 +50,7 @@
                                 <button type="button" class="model-mode-button" id="custom-model-mode" data-model-mode="custom" aria-pressed="false"><i class="fas fa-code" aria-hidden="true"></i> Custom Model</button>
                             </div>
                         </div>
-                        <div class="model-reference">
+                        <div class="model-reference" id="model-reference" hidden>
                             <h3 id="model-reference-title">Common model names and URLs</h3>
                             <div class="reference-table-scroll" tabindex="0" role="region" aria-labelledby="model-reference-title">
                                 <table class="model-reference-table">
@@ -123,9 +124,41 @@
                             </div>
                         </div>
                     </div>
+                </div>
+                <div class="setup-step api-key-step">
+                    <div class="step-heading">
+                        <span class="step-number" aria-hidden="true">3</span><h3><label for="api_key">API Key</label></h3>
+                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: API key" aria-describedby="field-help-5">
+                            <span class="info-icon-inner" aria-hidden="true">i</span>
+                            <div class="tooltip-text markdown-content" id="field-help-5" role="tooltip">
+                                <h3>API key</h3>
+                                <p>Enter an API key for the <strong>selected provider</strong>. Use the provider logos below the input to open its API key page.</p>
+                                <p>Use the eye button to show or hide the key while editing.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="step-content password-field">
+                        <input type="password" id="api_key" placeholder="Enter your API key" autocomplete="off" spellcheck="false">
+                        <button type="button" id="toggle_api_key" class="password-toggle" aria-label="Show API key" aria-pressed="false" aria-controls="api_key"><i class="far fa-eye" aria-hidden="true"></i></button>
+                    </div>
+                    <div class="step-content api-key-help">
+                        <p class="api-key-help-title">How to get an API key</p>
+                        <nav class="api-key-links" aria-label="Get an API key from your provider">
+                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" aria-label="Get a DeepSeek API key (opens in a new tab)">
+                                <img class="provider-logo" src="/static/images/providers/deepseek.png" width="24" height="24" alt="" decoding="async"><span>DeepSeek</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                            </a>
+                            <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer" aria-label="Get an OpenRouter API key — supports 600+ models (opens in a new tab)">
+                                <img class="provider-logo" src="/static/images/providers/openrouter.svg" width="24" height="24" alt="" decoding="async"><span>OpenRouter</span><span class="model-count-badge">Supports 600+ models</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                            </a>
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" aria-label="Get an OpenAI API key (opens in a new tab)">
+                                <img class="provider-logo" src="/static/images/providers/openai.svg" width="24" height="24" alt="" decoding="async"><span>OpenAI</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                            </a>
+                        </nav>
+                    </div>
+                </div>
                     <div class="setup-step">
                         <div class="step-heading">
-                            <span class="step-number" aria-hidden="true">3</span><h3>Advanced Parameters</h3>
+                            <span class="step-number" aria-hidden="true">4</span><h3>Advanced Parameters</h3>
                             <div class="tooltip info-icon" tabindex="0" aria-label="Help: Advanced parameters" aria-describedby="field-help-4">
                                 <span class="info-icon-inner" aria-hidden="true">i</span>
                                 <div class="tooltip-text markdown-content" id="field-help-4" role="tooltip">
@@ -146,24 +179,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="setup-step api-key-step">
-                    <div class="step-heading">
-                        <span class="step-number" aria-hidden="true">4</span><h3><label for="api_key">API Key</label></h3>
-                        <div class="tooltip info-icon" tabindex="0" aria-label="Help: API key" aria-describedby="field-help-5">
-                            <span class="info-icon-inner" aria-hidden="true">i</span>
-                            <div class="tooltip-text markdown-content" id="field-help-5" role="tooltip">
-                                <h3>API key</h3>
-                                <p>Enter an API key for the <strong>selected provider</strong>. The links in the model reference table open each provider's API key page.</p>
-                                <p>Use the eye button to show or hide the key while editing.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="step-content password-field">
-                        <input type="password" id="api_key" placeholder="Enter your API key" autocomplete="off" spellcheck="false">
-                        <button type="button" id="toggle_api_key" class="password-toggle" aria-label="Show API key" aria-pressed="false" aria-controls="api_key"><i class="far fa-eye" aria-hidden="true"></i></button>
-                    </div>
-                </div>
             </div>
         </section>
         <section class="settings-section" aria-labelledby="stimulus-design-title">
@@ -180,90 +195,15 @@
                             <span class="info-icon-inner" aria-hidden="true">i</span>
                             <div class="tooltip-text markdown-content" id="field-help-6" role="tooltip">
                                 <h3>Example stimuli</h3>
-                                <p>Each item is a complete example of the stimulus you want to generate.</p>
-                                <ul>
-                                <li><strong>Components:</strong> Name each part of the item.</li>
-                                <li><strong>Content:</strong> Provide the corresponding example content.</li>
-                                <li>Use the same components across all example items.</li>
-                                <li>Put components that must be unique across items <strong>before the components that use them</strong>.</li>
-                                </ul>
-                                <h4>Example</h4>
-                                <div class="tooltip-table-scroll"><table>
-                                <thead>
-                                <tr>
-                                  <th>Components</th>
-                                  <th>Content</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <tr>
-                                  <td>Verb</td>
-                                  <td>eat</td>
-                                </tr>
-                                <tr>
-                                  <td>Name</td>
-                                  <td>Alice</td>
-                                </tr>
-                                <tr>
-                                  <td>Active Condition</td>
-                                  <td>Alice eats an apple.</td>
-                                </tr>
-                                <tr>
-                                  <td>Passive Condition</td>
-                                  <td>An apple is eaten by Alice.</td>
-                                </tr>
-                                </tbody>
-                                </table></div>
-                                <p>Use <strong>Add component</strong> to add a row to every item and <strong>Add item</strong> to add another complete example. Provide <strong>2–3 full examples</strong> to help the agent learn.</p>
+                                <p>Add a complete example for each condition on the left. On the right, optionally list elements that must be unique across items, with their values in each example.</p>
+                                <p>Each item is edited independently, including names, values and row order. Use the row handles to reorder within an item, or focus a handle and press the up/down arrow keys.</p>
+                                <p>Use the copy button to duplicate an item, or <strong>Add item</strong> for a new blank example.</p>
                             </div>
                         </div>
                     </div>
-                    <p class="description-text">Add multiple example items to help the agent learn.</p>
-                    <div class="component-tip" role="note">
-                        <p><strong>Avoid repeats:</strong> Put elements that must be unique across stimulus items (e.g., verbs or names) in separate components, and list these components before those that use them.</p>
-                        <p><strong>Example:</strong> Each item uses a unique verb and name to generate sentences in two conditions: active and passive voice.</p>
-                        <table class="component-example-table" aria-label="Example components for active and passive conditions">
-                            <thead><tr><th scope="col">Components</th><th scope="col">Content</th></tr></thead>
-                            <tbody>
-                                <tr><th scope="row">Verb</th><td>eat</td></tr>
-                                <tr><th scope="row">Name</th><td>Alice</td></tr>
-                                <tr><th scope="row">Active Condition</th><td>Alice eats an apple.</td></tr>
-                                <tr><th scope="row">Passive Condition</th><td>An apple is eaten by Alice.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Example table container -->
-                    <div id="items-container">
-                        <!-- Item 1 -->
-                        <div class="item-container" id="item-1">
-                            <div class="item-title">Item 1</div>
-                            <table class="stimuli-table">
-                                <thead>
-                                    <tr>
-                                        <th class="type-column">Components</th>
-                                        <th class="content-column">Content</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td class="type-column"><input type="text" aria-label="Component"></td>
-                                        <td class="content-column"><input type="text" aria-label="Content">
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <div class="item-buttons-row example-buttons">
-                                <div class="left-buttons">
-                                    <button class="add-component-btn">Add component</button>
-                                    <button class="delete-component-btn">Delete component</button>
-                                </div>
-                                <div class="right-buttons">
-                                    <button class="add-item-btn">Add item</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <p class="description-text">Add example items to show the agent what to generate for each experimental condition, and specify duplication constraints for the elements used in each item.</p>
+                    <div id="items-container"></div>
+                    <div class="button-container-spaced"><button type="button" class="add-item-btn">Add item</button></div>
                 </div>
                 <div class="form-group">
                     <div class="label-container">
@@ -526,6 +466,11 @@ Stimuli across conditions should be matched for [properties to control, e.g., le
                     <div class="progress-container" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                         <div class="progress-bar" id="progress_bar"></div>
                     </div>
+                </div>
+                <div class="generation-history" aria-labelledby="generation-history-title">
+                    <div class="history-heading"><h3 id="generation-history-title">Generation history</h3><button type="button" id="refresh-history" aria-label="Refresh generation history"><i class="fas fa-arrow-rotate-right" aria-hidden="true"></i> Refresh</button></div>
+                    <p class="description-text">Results from this session are available for 24 hours. Click a record for the wide CSV, or choose Detailed CSV for validation results and generation diagnostics.</p>
+                    <div id="generation-history-list" aria-live="polite"><p class="history-empty">No generated results yet.</p></div>
                 </div>
                 <p class="restart-notice"><i class="fas fa-circle-info" aria-hidden="true"></i><span>The app restarts periodically to keep the server running. A countdown appears in the top-left corner 20 minutes before each restart.</span></p>
             </div>

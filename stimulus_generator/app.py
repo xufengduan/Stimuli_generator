@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for
 from flask_cors import CORS
 import json
-import ast
 import uuid
 import os
 import pickle
@@ -10,8 +9,10 @@ from threading import Event, Thread, Lock
 from functools import wraps
 from multiprocessing import Value
 from .backend import generate_stimuli, custom_model_inference_handler
+from .csv_export import EXPORT_VERSION, export_csv_bytes, raw_csv_bytes, read_archived_csv, download_names
 from collections import defaultdict
 import io
+import shutil
 from flask_socketio import SocketIO, emit
 import time
 
@@ -52,74 +53,57 @@ def get_session_file(session_id):
     return os.path.join(SESSION_DIR, f"{session_id}.pkl")
 
 
-def parse_stimulus_content(value):
-    """Read both new JSON and legacy pandas CSV dict representations safely."""
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
+def write_archive_exports(session_id, entry, dataframe):
+    directory = os.path.splitext(get_session_file(session_id))[0]
+    os.makedirs(directory, exist_ok=True)
+    filename = entry['filename']
+    if os.path.basename(filename) != filename:
+        raise ValueError('Invalid result filename')
+    config = entry.get('export_config', {})
+    variants = {
+        filename: export_csv_bytes(dataframe, config),
+        filename + '.detailed.csv': export_csv_bytes(dataframe, config, detailed=True),
+        filename + '.raw.csv': raw_csv_bytes(dataframe),
+    }
+    for name, content in variants.items():
+        destination = os.path.join(directory, name)
+        temporary = destination + '.' + uuid.uuid4().hex + '.tmp'
         try:
-            parsed = json.loads(value)
-        except (ValueError, TypeError):
-            try:
-                parsed = ast.literal_eval(value)
-            except (ValueError, SyntaxError):
-                return {}
-        return parsed if isinstance(parsed, dict) else {}
-    return {}
+            with open(temporary, 'wb') as output:
+                output.write(content)
+            os.replace(temporary, destination)
+        finally:
+            if os.path.exists(temporary):
+                os.remove(temporary)
+    entry['export_version'] = EXPORT_VERSION
+    entry['download_name'], entry['detailed_download_name'] = download_names(
+        entry['created_at'], entry['rows'], entry.get('partial', False))
 
 
-def format_stimulus_content(stimulus_content):
-    stimulus_dict = parse_stimulus_content(stimulus_content)
-    if not stimulus_dict:
-        return str(stimulus_content)
-    return "\n\n".join(f"Key {i}: {key}\nContent: {value}"
-                          for i, (key, value) in enumerate(stimulus_dict.items(), 1))
+def ensure_archive_exports(session_id, entry):
+    directory = os.path.splitext(get_session_file(session_id))[0]
+    path = os.path.join(directory, entry['filename'])
+    if entry.get('export_version') == EXPORT_VERSION and os.path.isfile(path + '.detailed.csv'):
+        return
+    source = path + '.raw.csv' if os.path.isfile(path + '.raw.csv') else path
+    if not os.path.isfile(source):
+        return
+    with open(source, 'rb') as archived:
+        dataframe = read_archived_csv(archived.read())
+    write_archive_exports(session_id, entry, dataframe)
 
 
-def expand_stimulus_content_to_columns(df):
-    """
-    Expand stimulus_content column into multiple Key and Content columns
-    """
-    if 'stimulus_content' not in df.columns:
-        return df
-
-    # Create new dataframe copy
-    df_expanded = df.copy()
-
-    # Collect all required columns
-    max_items = 0
-    expanded_data = []
-
-    for idx, row in df_expanded.iterrows():
-        stimulus_content = row['stimulus_content']
-
-        stimulus_dict = parse_stimulus_content(stimulus_content)
-
-        # Record maximum number of items
-        max_items = max(max_items, len(stimulus_dict))
-
-        # Create expanded data for this row
-        row_data = {}
-        for i, (key, value) in enumerate(stimulus_dict.items(), 1):
-            row_data[f'Key{i}'] = key
-            row_data[f'Content{i}'] = value
-
-        expanded_data.append(row_data)
-
-    # Create all new columns
-    for i in range(1, max_items + 1):
-        df_expanded[f'Key{i}'] = ''
-        df_expanded[f'Content{i}'] = ''
-
-        # Fill data
-    for idx, row_data in zip(df_expanded.index, expanded_data):
-        for col, value in row_data.items():
-            df_expanded.at[idx, col] = value
-
-    # Remove original stimulus_content column
-    df_expanded = df_expanded.drop(columns=['stimulus_content'])
-
-    return df_expanded
+def archive_generation(session_id, state, partial=False):
+    """Keep both CSV variants and source records for each completed batch."""
+    filename = state.get('generation_file')
+    dataframe = state.get('dataframe')
+    history = state.setdefault('generation_history', [])
+    if not filename or dataframe is None or any(row['filename'] == filename for row in history):
+        return
+    entry = {'filename': filename, 'created_at': time.time(), 'rows': len(dataframe),
+             'partial': bool(partial), 'export_config': state.get('export_config', {})}
+    write_archive_exports(session_id, entry, dataframe)
+    history.insert(0, entry)
 
 # Save the session state to a file
 
@@ -133,16 +117,14 @@ def save_session(session_id, session_state):
         'total_iterations_value': session_state['total_iterations'].value,
         # Save stop_event state
         'stop_event_is_set': session_state['stop_event'].is_set(),
+        'generation_history': session_state.get('generation_history', []),
+        'export_config': session_state.get('export_config', {}),
     }
 
     # If there is a dataframe and it is not None, convert it to a CSV string and save it
     if session_state.get('dataframe') is not None:
         try:
-            persisted_df = session_state['dataframe'].copy()
-            if 'stimulus_content' in persisted_df:
-                persisted_df['stimulus_content'] = persisted_df['stimulus_content'].map(
-                    lambda value: json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else value)
-            csv_data = persisted_df.to_csv(index=False)
+            csv_data = raw_csv_bytes(session_state['dataframe']).decode('utf-8-sig')
             serializable_state['dataframe_csv'] = csv_data
         except Exception as e:
             print(
@@ -174,7 +156,9 @@ def create_session_state():
         # Shared variable, used to store the total iteration count
         'total_iterations': Value('i', 1),
         'generation_thread': None,  # Store the generation thread
-        'dataframe': None  # Reset the dataframe
+        'dataframe': None,  # Reset the dataframe
+        'generation_history': [],
+        'export_config': {}
     }
     return state
 
@@ -200,6 +184,8 @@ def load_session(session_id):
                 'generation_file')
             session_state['error_message'] = serialized_state.get(
                 'error_message')
+            session_state['generation_history'] = serialized_state.get('generation_history', [])
+            session_state['export_config'] = serialized_state.get('export_config', {})
 
             with session_state['current_iteration'].get_lock():
                 session_state['current_iteration'].value = serialized_state.get(
@@ -222,7 +208,7 @@ def load_session(session_id):
                     import io
                     csv_data = serialized_state['dataframe_csv']
                     session_state['dataframe'] = pd.read_csv(
-                        io.StringIO(csv_data))
+                        io.StringIO(csv_data), keep_default_na=False)
                 except Exception as e:
                     print(
                         f"Error deserializing dataframe for session {session_id}: {str(e)}")
@@ -402,6 +388,7 @@ def generate_stimulus(session_id):
             'websocket_callback': session_websocket_callback,
             'agent_2_individual_validation': data.get('agent2IndividualValidation', False),
             'agent_3_individual_scoring': data.get('agent3IndividualScoring', False),
+            'avoid_duplication_fields': data.get('avoidDuplicationFields', []),
         }
 
         # Add custom model parameters if custom model is selected
@@ -417,9 +404,28 @@ def generate_stimulus(session_id):
                 return jsonify({'status': 'error', 'message': 'Agent properties must be JSON objects'}), 400
         if not isinstance(settings['previous_stimuli'], list):
             return jsonify({'status': 'error', 'message': 'Previous stimuli must be a JSON array'}), 400
+        fields = settings['avoid_duplication_fields']
+        if (not isinstance(fields, list) or any(not isinstance(field, str) or
+                field not in settings['agent_1_properties'] for field in fields)):
+            return jsonify({'status': 'error', 'message': 'Invalid avoid duplication fields'}), 400
+        # Keep uniqueness elements first even when a client serializes JSON keys
+        # in a different order (for example, numeric condition names).
+        properties = settings['agent_1_properties']
+        ordered_names = list(dict.fromkeys(fields + list(properties)))
+        settings['agent_1_properties'] = {name: properties[name] for name in ordered_names}
+        settings['previous_stimuli'] = [
+            {name: stimulus[name] for name in dict.fromkeys(fields + list(stimulus)) if name in stimulus}
+            if isinstance(stimulus, dict) else stimulus for stimulus in settings['previous_stimuli']]
 
         # Reset only after input validation has succeeded.
         with sessions_lock:
+            archive_generation(session_id, session_state)
+            session_state['export_config'] = {
+                'element_fields': fields,
+                'stimulus_fields': list(settings['agent_1_properties']),
+                'score_fields': list(settings['agent_3_properties']),
+                'validation_fields': list(settings['agent_2_properties']),
+            }
             # Reset all states
             # Clear the previous stop signal
             session_state['stop_event'].clear()
@@ -530,7 +536,7 @@ def generate_stimulus(session_id):
                 # Force using a new timestamp, ensuring the file name is unique
                 import time
                 timestamp = int(time.time())
-                updated_filename = f"experiment_stimuli_results_{session_id}_{timestamp}.csv"
+                updated_filename = f"experiment_stimuli_results_{session_id}_{timestamp}_{uuid.uuid4().hex[:8]}.csv"
 
                 # Ensure the generated dataframe is new and contains complete data
                 print(
@@ -553,6 +559,8 @@ def generate_stimulus(session_id):
                         session_state['dataframe'] = df.copy()
                         # Use the newly generated file name
                         session_state['generation_file'] = updated_filename
+                        partial = is_stopped or len(df) < settings['iteration']
+                        archive_generation(session_id, session_state, partial=partial)
 
                         # Record the completion status
                         if is_stopped:
@@ -791,79 +799,40 @@ def stop_generation(session_id):
     return jsonify({'message': 'Stopping generation. Partial data will be saved if available.'})
 
 
+@app.route('/<session_id>/generation_history', methods=['GET'])
+def generation_history(session_id):
+    state = load_session(session_id)
+    with sessions_lock:
+        archive_generation(session_id, state)
+        for entry in state['generation_history']:
+            ensure_archive_exports(session_id, entry)
+        save_session(session_id, state)
+        history = [{key: value for key, value in entry.items() if key != 'export_config'}
+                   for entry in state['generation_history']]
+    return jsonify({'history': history})
+
+
 @app.route('/<session_id>/download/<filename>', methods=['GET'])
 def download_file(session_id, filename):
-    # Load the session state
-    session_state = load_session(session_id)
-
-    # Check if there is a dataframe available
-    if session_state.get('dataframe') is None:
-        print(f"Error: No dataframe available for session {session_id}")
-        return jsonify({'message': 'No data available for download.'}), 404
-
-    # Compare the requested file name with the file name in the current session state
-    stored_filename = session_state.get('generation_file')
-    if stored_filename != filename:
-        print(
-            f"Warning: Requested file {filename} does not match current session file {stored_filename}")
-        # Force verification: if the file name does not match, reject the request instead of continuing
-        return jsonify({'message': 'Requested file does not match current session file'}), 400
-
-    try:
-        # Check if the requested filename contains a session ID
-        if session_id not in filename:
-            print(
-                f"Error: Requested file {filename} does not contain session ID {session_id}")
-            return jsonify({'message': 'Invalid file request: session ID mismatch'}), 400
-
-        # Get a dataframe copy for download, excluding metadata columns
-        df_to_download = session_state['dataframe'].copy()
-
-        # Remove metadata columns if they exist
-        metadata_columns = ['generation_timestamp', 'batch_id', 'total_iterations',
-                            'download_timestamp', 'error_occurred', 'error_message']
-        for col in metadata_columns:
-            if col in df_to_download.columns:
-                df_to_download = df_to_download.drop(columns=[col])
-
-        # Expand stimulus_content column if it exists
-        df_to_download = expand_stimulus_content_to_columns(df_to_download)
-
-        # Store timestamp in variable for logging but don't add to dataframe
-        current_timestamp = int(time.time())
-
-        # Create a temporary memory file object
-        buffer = io.StringIO()
-
-        # Write the dataframe to the buffer
-        df_to_download.to_csv(buffer, index=False)
-        buffer.seek(0)  # Move the pointer back to the beginning
-
-        print(
-            f"Serving file {filename} with {len(df_to_download)} rows for session {session_id}")
-
-        # Keep results available for retries/repeated downloads until normal expiry.
-
-        # Return the CSV file from memory
-        try:
-            # Try using the newer version of Flask's parameter name
-            return send_file(
-                io.BytesIO(buffer.getvalue().encode()),
-                as_attachment=True,
-                download_name=filename,
-                mimetype='text/csv'
-            )
-        except TypeError:
-            # If failed, try using the older version of Flask's parameter name
-            return send_file(
-                io.BytesIO(buffer.getvalue().encode()),
-                as_attachment=True,
-                attachment_filename=filename,
-                mimetype='text/csv'
-            )
-    except Exception as e:
-        print(f"Error generating download file: {str(e)}")
-        return jsonify({'message': f'Error generating file: {str(e)}'}), 500
+    variant = request.args.get('variant', 'wide')
+    if variant not in ('wide', 'detailed'):
+        return jsonify({'message': 'Unknown CSV variant.'}), 400
+    state = load_session(session_id)
+    with sessions_lock:
+        archive_generation(session_id, state)
+        entry = next((row for row in state['generation_history']
+                      if row['filename'] == filename), None)
+        if not entry:
+            return jsonify({'message': 'Requested result is not available in this session.'}), 404
+        ensure_archive_exports(session_id, entry)
+        suffix = '.detailed.csv' if variant == 'detailed' else ''
+        path = os.path.join(os.path.splitext(get_session_file(session_id))[0], filename + suffix)
+        if not os.path.isfile(path):
+            return jsonify({'message': 'This result has expired.'}), 404
+        download_name = entry.get('detailed_download_name' if variant == 'detailed' else 'download_name', filename)
+        save_session(session_id, state)
+    return send_file(path, as_attachment=True, download_name=download_name,
+                     mimetype='text/csv; charset=utf-8', max_age=0)
 
 
 # WebSocket initialization event
@@ -1022,6 +991,7 @@ def cleanup_sessions():
                 cleanup_session(session_id)
                 # Delete the file
                 os.remove(session_file)
+                shutil.rmtree(os.path.splitext(session_file)[0], ignore_errors=True)
                 print(f"Removed expired session file: {session_file}")
             except Exception as e:
                 print(
@@ -1089,8 +1059,8 @@ if __name__ == '__main__':
     print("Starting Stimulus Generator server...")
     print("WebSocket server configured with:")
     print(f"  - Async mode: {socketio.async_mode}")
-    print(f"  - Ping interval: 25s")
-    print(f"  - Ping timeout: 60s")
+    print(f"  - Ping interval: 10s")
+    print(f"  - Ping timeout: 30s")
     print(f"  - HTTP Compression: Disabled")
     print(f"  - Session Management: Disabled")
 

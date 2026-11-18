@@ -911,6 +911,7 @@ function setModelConfigurationMode(mode) {
     const enteringCustomMode = mode === 'custom' && modelConfigurationMode !== 'custom';
     modelConfigurationMode = mode;
     const isCustom = mode === 'custom';
+    document.getElementById('model-reference').hidden = !isCustom;
     document.querySelectorAll('[data-model-mode]').forEach(button => {
         const active = button.dataset.modelMode === mode;
         button.classList.toggle('is-active', active);
@@ -1006,10 +1007,12 @@ document.getElementById('toggle_api_key').addEventListener('click', () => {
     setApiKeyVisibility(apiKeyInput.type === 'password');
 });
 
-// Initial setup: Add event listeners for the first Item's buttons
-document.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
-document.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
-document.querySelector('.add-item-btn').addEventListener('click', addNewItem);
+// Example item controls use delegation so copied and added items behave identically.
+let draggedExampleRow = null;
+initializeExampleItems();
+document.querySelector('.add-item-btn').addEventListener('click', () => addNewItem());
+document.getElementById('refresh-history').addEventListener('click', refreshGenerationHistory);
+refreshGenerationHistory();
 
 // Add model selection listener
 modelChoice.addEventListener('change', handleModelChange);
@@ -1096,283 +1099,248 @@ function validateAutoGenerateInputs() {
         return false;
     }
 
-    // Check input in Item tables
-    const itemContainers = document.querySelectorAll('.item-container');
-    if (itemContainers.length === 0) {
-        alert('At least one example stimulus item is required!');
-        return false;
-    }
-
-    // Check if all example items are filled correctly
-    for (let i = 0; i < itemContainers.length; i++) {
-        const tbody = itemContainers[i].querySelector('.stimuli-table tbody');
-        const rows = tbody.getElementsByTagName('tr');
-
-        if (rows.length === 0) {
-            alert(`No component rows in Example Item ${i + 1}!`);
-            return false;
-        }
-
-        for (let j = 0; j < rows.length; j++) {
-            const typeCell = rows[j].querySelector('.type-column input');
-            const contentCell = rows[j].querySelector('.content-column input');
-
-            if (typeCell && contentCell) {
-                const typeValue = typeCell.value.trim();
-                const contentValue = contentCell.value.trim();
-
-                if (!typeValue || !contentValue) {
-                    alert(`All "Components" and "Content" fields in Item ${i + 1} must be filled!`);
-                    return false;
-                }
-            }
-        }
-    }
-
-    return true;
+    return validateExampleItems();
 }
 
-// Collect data from Example Stimuli tables
-function collectExampleStimuli() {
-    const stimuli = [];
-    const itemContainers = document.querySelectorAll('.item-container');
 
-    itemContainers.forEach((itemContainer, index) => {
-        const tbody = itemContainer.querySelector('.stimuli-table tbody');
-        const rows = tbody.getElementsByTagName('tr');
-        const itemData = {};
-
-        for (let i = 0; i < rows.length; i++) {
-            const typeCell = rows[i].querySelector('.type-column input');
-            const contentCell = rows[i].querySelector('.content-column input');
-
-            if (typeCell && contentCell) {
-                const type = typeCell.value.trim();
-                const content = contentCell.value.trim();
-
-                if (type && content) {
-                    itemData[type] = content;
-                }
-            }
-        }
-
-        // Only add to stimuli array when itemData is not empty
-        if (Object.keys(itemData).length > 0) {
-            stimuli.push(itemData);
-        }
-    });
-
-    return stimuli;
+// Each item owns its fields, values and row order independently.
+function exampleRows(item, kind) {
+    return Array.from(item.querySelectorAll(`[data-example-kind="${kind}"] tbody tr`));
 }
 
-// Add new component row to all tables
-function addComponentToAllItems() {
-    const tables = document.querySelectorAll('.stimuli-table tbody');
-    tables.forEach(tbody => {
-        const newRow = document.createElement('tr');
-        newRow.innerHTML = `
-            <td class="type-column"><input type="text" aria-label="Component"></td>
-            <td class="content-column"><input type="text" aria-label="Content"></td>
-        `;
-        tbody.appendChild(newRow);
-    });
+function createExampleRow(name = '', value = '') {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td class="row-handle-cell"><button type="button" class="example-row-handle" draggable="true" aria-label="Reorder row: drag or use arrow keys"><i class="fas fa-grip-vertical" aria-hidden="true"></i></button></td>
+        <td class="type-column"><input type="text" class="example-name"></td>
+        <td class="content-column"><input type="text" class="example-value"></td>
+        <td class="row-action-cell"><button type="button" class="remove-example-row" aria-label="Delete row"><i class="far fa-trash-alt" aria-hidden="true"></i></button></td>`;
+    row.querySelector('.example-name').value = name;
+    row.querySelector('.example-value').value = value;
+    return row;
 }
 
-// Delete last component row from all tables
-function deleteComponentFromAllItems() {
-    const tables = document.querySelectorAll('.stimuli-table tbody');
-    tables.forEach(tbody => {
-        const rows = tbody.getElementsByTagName('tr');
-        if (rows.length > 1) { // Ensure at least one row is kept
-            tbody.removeChild(rows[rows.length - 1]);
-        }
-    });
-}
-
-// Add new Item
-function addNewItem() {
-    // Get current newest Item number and calculate new Item number
-    const itemContainers = document.querySelectorAll('.item-container');
-    const lastItem = itemContainers[itemContainers.length - 1];
-    const lastItemId = lastItem.id;
-    const lastItemNumber = parseInt(lastItemId.split('-')[1]);
-    const newItemNumber = lastItemNumber + 1;
-
-    // Get current table row count
-    const lastItemTable = lastItem.querySelector('.stimuli-table tbody');
-    const rowCount = lastItemTable.rows.length;
-
-    // Create new Item container
-    const newItem = document.createElement('div');
-    newItem.className = 'item-container';
-    newItem.id = `item-${newItemNumber}`;
-
-    // Create Item title
-    const itemTitle = document.createElement('div');
-    itemTitle.className = 'item-title';
-    itemTitle.textContent = `Item ${newItemNumber}`;
-    newItem.appendChild(itemTitle);
-
-    // Create table
-    const table = document.createElement('table');
-    table.className = 'stimuli-table';
-
-    // Add table header
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-        <tr>
-            <th class="type-column">Components</th>
-            <th class="content-column">Content</th>
-        </tr>
-    `;
-    table.appendChild(thead);
-
-    // Add table content
-    const tbody = document.createElement('tbody');
-    for (let i = 0; i < rowCount; i++) {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="type-column"><input type="text" aria-label="Component"></td>
-            <td class="content-column"><input type="text" aria-label="Content"></td>
-        `;
-        tbody.appendChild(row);
+function createExampleItem(source = null, copyValues = false) {
+    const item = document.createElement('div');
+    item.className = 'item-container';
+    item.innerHTML = `<div class="item-header"><span class="item-title"></span><div class="item-actions">
+        <button type="button" class="copy-item-btn" aria-label="Duplicate item" title="Duplicate item"><i class="far fa-copy" aria-hidden="true"></i></button>
+        <button type="button" class="delete-item-btn" aria-label="Delete item" title="Delete item"><i class="far fa-trash-alt" aria-hidden="true"></i></button>
+        </div></div><div class="example-item-grid">
+        <div class="conditions-panel"><table class="stimuli-table example-table" data-example-kind="condition">
+        <thead><tr><th class="row-handle-cell"><span class="sr-only">Order</span></th><th class="type-column">Condition</th><th>Example stimulus</th><th class="row-action-cell"><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table>
+        <button type="button" class="add-condition-btn" data-add-example="condition"><span aria-hidden="true">＋</span> Add condition</button></div>
+        <section class="duplication-panel"><div class="duplication-heading"><i class="fas fa-link" aria-hidden="true"></i><h3>Avoid duplication <span class="duplication-item-label"></span></h3><span class="duplication-info" tabindex="0" aria-label="Elements must be unique across generated items. Leave blank if no constraints are needed." title="Elements must be unique across generated items. Leave blank if no constraints are needed.">i</span></div>
+        <p>Specify which elements in this item must be unique across items.</p>
+        <table class="duplication-table example-table" data-example-kind="element"><thead><tr><th class="row-handle-cell"><span class="sr-only">Order</span></th><th class="type-column">Element</th><th>Value (in this item)</th><th class="row-action-cell"><span class="sr-only">Actions</span></th></tr></thead><tbody></tbody></table>
+        <button type="button" class="add-element-btn" data-add-example="element"><span aria-hidden="true">＋</span> Add element</button></section></div>`;
+    for (const kind of ['condition', 'element']) {
+        const rows = source ? exampleRows(source, kind) : [null];
+        const body = item.querySelector(`[data-example-kind="${kind}"] tbody`);
+        rows.forEach(row => body.appendChild(createExampleRow(
+            row?.querySelector('.example-name').value || '',
+            copyValues ? row?.querySelector('.example-value').value || '' : ''
+        )));
     }
-    table.appendChild(tbody);
-    newItem.appendChild(table);
-
-    // Add buttons
-    const buttonDiv = document.createElement('div');
-    buttonDiv.className = 'item-buttons-row';
-    buttonDiv.innerHTML = `
-        <div class="left-buttons">
-            <button class="add-component-btn">Add component</button>
-            <button class="delete-component-btn">Delete component</button>
-        </div>
-        <div class="right-buttons">
-            <button class="add-item-btn">Add item</button>
-            <button class="delete-item-btn">Delete item</button>
-        </div>
-    `;
-    newItem.appendChild(buttonDiv);
-
-    // Remove buttons from previous Item container
-    lastItem.querySelector('.item-buttons-row').remove();
-
-    // Add new Item to container
-    itemsContainer.appendChild(newItem);
-
-    // Add event listeners for new buttons
-    newItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
-    newItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
-    newItem.querySelector('.add-item-btn').addEventListener('click', addNewItem);
-    newItem.querySelector('.delete-item-btn').addEventListener('click', function () {
-        deleteItem(newItem.id);
-    });
+    return item;
 }
 
-// Delete Item
-function deleteItem(itemId) {
-    const itemToDelete = document.getElementById(itemId);
-    const itemContainers = document.querySelectorAll('.item-container');
-
-    // If there's only one Item, don't perform delete operation
-    if (itemContainers.length <= 1) {
-        return;
-    }
-
-    // Get position of Item to be deleted
-    let itemIndex = -1;
-    for (let i = 0; i < itemContainers.length; i++) {
-        if (itemContainers[i].id === itemId) {
-            itemIndex = i;
-            break;
-        }
-    }
-
-    // If it's the last Item, need to add buttons to previous Item
-    if (itemIndex === itemContainers.length - 1) {
-        const previousItem = itemContainers[itemIndex - 1];
-        const buttonDiv = document.createElement('div');
-        buttonDiv.className = 'item-buttons-row';
-
-        // If it's Item 1, no Delete item button needed
-        if (previousItem.id === 'item-1') {
-            buttonDiv.innerHTML = `
-                <div class="left-buttons">
-                    <button class="add-component-btn">Add component</button>
-                    <button class="delete-component-btn">Delete component</button>
-                </div>
-                <div class="right-buttons">
-                    <button class="add-item-btn">Add item</button>
-                </div>
-            `;
-        } else {
-            buttonDiv.innerHTML = `
-                <div class="left-buttons">
-                    <button class="add-component-btn">Add component</button>
-                    <button class="delete-component-btn">Delete component</button>
-                </div>
-                <div class="right-buttons">
-                    <button class="add-item-btn">Add item</button>
-                    <button class="delete-item-btn">Delete item</button>
-                </div>
-            `;
-        }
-
-        previousItem.appendChild(buttonDiv);
-
-        // Add event listeners for new buttons
-        previousItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
-        previousItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
-        previousItem.querySelector('.add-item-btn').addEventListener('click', addNewItem);
-
-        const deleteItemBtn = previousItem.querySelector('.delete-item-btn');
-        if (deleteItemBtn) {
-            deleteItemBtn.addEventListener('click', function () {
-                deleteItem(previousItem.id);
+function renumberExampleItems() {
+    Array.from(itemsContainer.children).forEach((item, index) => {
+        const label = `Item ${index + 1}`;
+        item.id = `item-${index + 1}`;
+        item.querySelector('.item-title').textContent = label;
+        item.querySelector('.duplication-item-label').textContent = `(for ${label})`;
+        item.querySelector('.delete-item-btn').disabled = itemsContainer.children.length === 1;
+        for (const kind of ['condition', 'element']) {
+            exampleRows(item, kind).forEach((row, rowIndex) => {
+                row.querySelector('.example-name').setAttribute('aria-label', `${label} ${kind} ${rowIndex + 1}`);
+                row.querySelector('.example-value').setAttribute('aria-label', `${label} ${kind === 'condition' ? 'example stimulus' : 'element value'} ${rowIndex + 1}`);
+                row.querySelector('.remove-example-row').disabled = kind === 'condition' && exampleRows(item, kind).length === 1;
             });
         }
-    }
-
-    // Delete Item
-    itemToDelete.remove();
+    });
 }
 
-// Collect data from all Item tables
-function collectItemsData() {
-    const stimuli = [];
-    const itemContainers = document.querySelectorAll('.item-container');
+function addNewItem(source = null, copyValues = false) {
+    const item = createExampleItem(source, copyValues);
+    if (copyValues) source.after(item);
+    else itemsContainer.appendChild(item);
+    renumberExampleItems();
+    return item;
+}
 
-    itemContainers.forEach(itemContainer => {
-        const tbody = itemContainer.querySelector('.stimuli-table tbody');
-        const rows = tbody.getElementsByTagName('tr');
-        const itemData = {};
+function moveExampleRow(item, kind, from, to) {
+    const rows = exampleRows(item, kind);
+    const count = rows.length;
+    if (to < 0 || to >= count || from === to) return;
+    rows[to][to > from ? 'after' : 'before'](rows[from]);
+    renumberExampleItems();
+}
 
-        for (let i = 0; i < rows.length; i++) {
-            const typeCell = rows[i].querySelector('.type-column input');
-            const contentCell = rows[i].querySelector('.content-column input');
-
-            if (typeCell && contentCell) {
-                const type = typeCell.value.trim();
-                const content = contentCell.value.trim();
-
-                if (type && content) {
-                    itemData[type] = content;
-                }
+function initializeExampleItems() {
+    itemsContainer.replaceChildren(createExampleItem());
+    renumberExampleItems();
+    itemsContainer.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button || button.disabled) return;
+        const item = button.closest('.item-container');
+        if (button.matches('.copy-item-btn')) addNewItem(item, true);
+        if (button.matches('.delete-item-btn') && itemsContainer.children.length > 1) item.remove();
+        if (button.dataset.addExample) {
+            const kind = button.dataset.addExample;
+            item.querySelector(`[data-example-kind="${kind}"] tbody`).appendChild(createExampleRow());
+        }
+        if (button.matches('.remove-example-row')) {
+            const kind = button.closest('table').dataset.exampleKind;
+            if (kind === 'element' || exampleRows(item, kind).length > 1) {
+                button.closest('tr').remove();
             }
         }
-
-        // Only add to stimuli array when itemData is not empty
-        if (Object.keys(itemData).length > 0) {
-            stimuli.push(itemData);
-        }
+        renumberExampleItems();
     });
-
-    return stimuli;
+    itemsContainer.addEventListener('keydown', event => {
+        if (!event.target.matches('.example-row-handle') || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const kind = event.target.closest('table').dataset.exampleKind;
+        const item = event.target.closest('.item-container');
+        const from = exampleRows(item, kind).indexOf(event.target.closest('tr'));
+        const to = from + (event.key === 'ArrowDown' ? 1 : -1);
+        moveExampleRow(item, kind, from, to);
+        event.target.focus();
+    });
+    itemsContainer.addEventListener('dragstart', event => {
+        if (!event.target.matches('.example-row-handle') || event.target.disabled) return;
+        const row = event.target.closest('tr');
+        const kind = row.closest('table').dataset.exampleKind;
+        const item = row.closest('.item-container');
+        draggedExampleRow = {item, kind, from: exampleRows(item, kind).indexOf(row)};
+        event.dataTransfer.setData('text/plain', String(draggedExampleRow.from));
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    itemsContainer.addEventListener('dragover', event => {
+        const table = event.target.closest('table');
+        if (draggedExampleRow && table?.dataset.exampleKind === draggedExampleRow.kind &&
+            table.closest('.item-container') === draggedExampleRow.item) event.preventDefault();
+    });
+    itemsContainer.addEventListener('drop', event => {
+        const row = event.target.closest('tbody tr');
+        if (!row || row.closest('table').dataset.exampleKind !== draggedExampleRow?.kind ||
+            row.closest('.item-container') !== draggedExampleRow.item) return;
+        event.preventDefault();
+        const {item, kind, from} = draggedExampleRow;
+        moveExampleRow(item, kind, from, exampleRows(item, kind).indexOf(row));
+        draggedExampleRow = null;
+    });
+    itemsContainer.addEventListener('dragend', () => { draggedExampleRow = null; });
 }
 
+function validateExampleItems() {
+    const fieldKinds = new Map();
+    for (const [index, item] of Array.from(itemsContainer.children).entries()) {
+        const names = new Set();
+        for (const kind of ['element', 'condition']) {
+            for (const row of exampleRows(item, kind)) {
+                const name = row.querySelector('.example-name').value.trim();
+                const value = row.querySelector('.example-value').value.trim();
+                if (kind === 'element' && !name && !value) continue;
+                if (!name || !value) {
+                    alert(`Fill in both ${kind === 'condition' ? 'Condition and Example stimulus' : 'Element and Value'} in Item ${index + 1}.`);
+                    (!name ? row.querySelector('.example-name') : row.querySelector('.example-value')).focus();
+                    return false;
+                }
+                if (names.has(name)) {
+                    alert(`Condition and element names must be distinct in Item ${index + 1}: ${name}`);
+                    return false;
+                }
+                if (fieldKinds.has(name) && fieldKinds.get(name) !== kind) {
+                    alert(`Use distinct names for conditions and elements: ${name}`);
+                    return false;
+                }
+                names.add(name);
+                fieldKinds.set(name, kind);
+            }
+        }
+    }
+    return itemsContainer.children.length > 0;
+}
 
-// This event listener was removed since we now have individual delete buttons for each row
+// Preserve schema order: uniqueness elements precede the conditions that use them.
+function collectExampleStimuli() {
+    return Array.from(itemsContainer.children, item => Object.fromEntries(
+        ['element', 'condition'].flatMap(kind => exampleRows(item, kind).map(row => [
+            row.querySelector('.example-name').value.trim(), row.querySelector('.example-value').value.trim()
+        ]).filter(([name, value]) => name && value))
+    ));
+}
+
+function collectItemsData() {
+    return collectExampleStimuli();
+}
+
+function collectGeneratorConfiguration() {
+    const items = Array.from(itemsContainer.children);
+    const entries = ['element', 'condition'].flatMap(kind => items.flatMap(item => exampleRows(item, kind).map(row => {
+        const name = row.querySelector('.example-name').value.trim();
+        return [name, kind === 'element' ? {type: 'string', description: 'This element must be unique across items. Do not reuse any value from existing stimuli.'} : {type: 'string'}];
+    }).filter(([name]) => name)));
+    return {
+        properties: Object.fromEntries(entries),
+        avoidDuplicationFields: [...new Set(items.flatMap(item => exampleRows(item, 'element').map(row => row.querySelector('.example-name').value.trim()).filter(Boolean)))]
+    };
+}
+
+async function refreshGenerationHistory() {
+    const list = document.getElementById('generation-history-list');
+    try {
+        const response = await fetch(getApiUrl('generation_history'));
+        if (!response.ok) throw new Error('History unavailable');
+        const data = await response.json();
+        const entries = data.history.map(entry => {
+            const record = document.createElement('div');
+            record.className = 'history-entry';
+            const link = document.createElement('a');
+            link.className = 'history-record';
+            link.href = getApiUrl(`download/${encodeURIComponent(entry.filename)}`);
+            link.download = entry.download_name || entry.filename;
+            const icon = document.createElement('i');
+            icon.className = 'far fa-file-lines';
+            icon.setAttribute('aria-hidden', 'true');
+            const details = document.createElement('span');
+            details.className = 'history-record-details';
+            const title = document.createElement('strong');
+            title.textContent = `${entry.rows} ${entry.rows === 1 ? 'item' : 'items'}${entry.partial ? ' · Partial result' : ''}`;
+            const date = document.createElement('span');
+            date.textContent = new Date(entry.created_at * 1000).toLocaleString();
+            details.append(title, date);
+            const label = document.createElement('span');
+            label.className = 'history-download';
+            label.textContent = '↓ CSV';
+            link.append(icon, details, label);
+            link.title = entry.download_name || entry.filename;
+            const detailed = document.createElement('a');
+            detailed.className = 'history-detailed';
+            detailed.href = `${link.href}?variant=detailed`;
+            detailed.download = entry.detailed_download_name || entry.filename;
+            detailed.textContent = 'Detailed CSV';
+            detailed.setAttribute('aria-label', `Download detailed CSV: ${entry.rows} items, ${date.textContent}`);
+            record.append(link, detailed);
+            return record;
+        });
+        if (entries.length) list.replaceChildren(...entries);
+        else {
+            const empty = document.createElement('p');
+            empty.className = 'history-empty';
+            empty.textContent = 'No generated results yet.';
+            list.replaceChildren(empty);
+        }
+    } catch (_) {
+        if (list.querySelector('.history-record')) return;
+        const message = document.createElement('p');
+        message.className = 'history-empty';
+        message.textContent = 'Could not load history. Use Refresh to try again.';
+        list.replaceChildren(message);
+    }
+}
 
 // Show generating status text
 function showGeneratingStatus() {
@@ -1477,7 +1445,7 @@ function resetUI() {
     addAgent3Button.disabled = false;
 
     // Enable Add/Delete buttons in all tables
-    document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
+    document.querySelectorAll('#items-container button, .add-item-btn').forEach(btn => {
         btn.disabled = false;
     });
 
@@ -1498,6 +1466,7 @@ function resetUI() {
         }
     });
 
+    renumberExampleItems();
     // Reset progress bar
     updateProgress(0);
 }
@@ -1550,27 +1519,7 @@ function validateInputs() {
         }
     }
 
-    // Check inputs in Item tables
-    const itemContainers = document.querySelectorAll('.item-container');
-    for (let i = 0; i < itemContainers.length; i++) {
-        const tbody = itemContainers[i].querySelector('.stimuli-table tbody');
-        const rows = tbody.getElementsByTagName('tr');
-
-        for (let j = 0; j < rows.length; j++) {
-            const typeCell = rows[j].querySelector('.type-column input');
-            const contentCell = rows[j].querySelector('.content-column input');
-
-            if (typeCell && contentCell) {
-                const typeValue = typeCell.value.trim();
-                const contentValue = contentCell.value.trim();
-
-                if (!typeValue || !contentValue) {
-                    alert(`All Components and Content fields in the "Item ${i + 1}" table must be filled!`);
-                    return false;
-                }
-            }
-        }
-    }
+    if (!validateExampleItems()) return false;
 
     // Check Experiment Design
     if (!experimentDesign) {
@@ -1663,7 +1612,7 @@ function startGeneration() {
     addAgent3Button.disabled = true;
 
     // Disable Add/Delete buttons in all tables
-    document.querySelectorAll('.add-component-btn, .delete-component-btn, .add-item-btn, .delete-item-btn').forEach(btn => {
+    document.querySelectorAll('#items-container button, .add-item-btn').forEach(btn => {
         btn.disabled = true;
     });
 
@@ -1685,22 +1634,8 @@ function startGeneration() {
     const stimuli = collectItemsData();
     const previousStimuli = JSON.stringify(stimuli); // Convert to JSON string
 
-    // Modify the logic to get agent1Properties
-    // Get data from Components column of the first Item table
-    const agent1Properties = {};
-    // Find the first Item table
-    const firstItemTable = document.querySelector('#item-1 .stimuli-table');
-    if (firstItemTable) {
-        // Get all rows (skip header)
-        const componentRows = Array.from(firstItemTable.querySelectorAll('tbody tr'));
-        componentRows.forEach(row => {
-            // Get input value from Components column
-            const componentInput = row.querySelector('td.type-column input');
-            if (componentInput && componentInput.value.trim()) {
-                agent1Properties[componentInput.value.trim()] = { type: 'string' };
-            }
-        });
-    }
+    const generatorConfiguration = collectGeneratorConfiguration();
+    const agent1Properties = generatorConfiguration.properties;
 
     // Get agent2_properties
     const agent2Rows = Array.from(agent2Table.rows).slice(1);
@@ -1741,6 +1676,7 @@ function startGeneration() {
 
     const settings = {
         agent1Properties: JSON.stringify(agent1Properties),
+        avoidDuplicationFields: generatorConfiguration.avoidDuplicationFields,
         agent2Properties: JSON.stringify(agent2Properties),
         agent3Properties: JSON.stringify(agent3Properties),
         apiKey: document.getElementById('api_key').value,
@@ -1869,6 +1805,7 @@ function checkGenerationStatus() {
                 if (data.file) {
                     // Save current file name for future check to avoid duplicates
                     const currentFile = data.file;
+                    refreshGenerationHistory();
 
                     // Ensure file contains current session ID to prevent downloading incorrect file
                     if (!currentFile.includes(sessionId)) {
@@ -2082,47 +2019,8 @@ clearButton.addEventListener('click', () => {
     setModelConfigurationMode('predefined');
     setApiKeyVisibility(false);
 
-    // Clear all Items, only keep one initial Item
-    while (itemsContainer.firstChild) {
-        itemsContainer.removeChild(itemsContainer.firstChild);
-    }
-
-    // Create new Item 1
-    const newItem = document.createElement('div');
-    newItem.className = 'item-container';
-    newItem.id = 'item-1';
-    newItem.innerHTML = `
-        <div class="item-title">Item 1</div>
-        <table class="stimuli-table">
-            <thead>
-                <tr>
-                    <th class="type-column">Components</th>
-                    <th class="content-column">Content</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="type-column"><input type="text" aria-label="Component"></td>
-                    <td class="content-column"><input type="text" aria-label="Content"></td>
-                </tr>
-            </tbody>
-        </table>
-        <div class="item-buttons-row">
-            <div class="left-buttons">
-                <button class="add-component-btn">Add component</button>
-                <button class="delete-component-btn">Delete component</button>
-            </div>
-            <div class="right-buttons">
-                <button class="add-item-btn">Add item</button>
-            </div>
-        </div>
-    `;
-    itemsContainer.appendChild(newItem);
-
-    // Add event listener to new buttons
-    newItem.querySelector('.add-component-btn').addEventListener('click', addComponentToAllItems);
-    newItem.querySelector('.delete-component-btn').addEventListener('click', deleteComponentFromAllItems);
-    newItem.querySelector('.add-item-btn').addEventListener('click', addNewItem);
+    itemsContainer.replaceChildren(createExampleItem());
+    renumberExampleItems();
 
     // Add Agent 2 table clear functionality
     const agent2Rows = Array.from(agent2Table.rows).slice(1); // Skip header

@@ -1,0 +1,5 @@
+{
+  "source": "CUHK logo attachment supplied by the user",
+  "processing": "Built-in image_gen, transparent background extraction",
+  "prompt": "Use case: background-extraction. Edit target: the attached Chinese University of Hong Kong logo. Asset type: website header logo. Remove ONLY the white background and surrounding empty white margins, returning a transparent PNG cutout of the entire original crest and bilingual university name. Preserve the exact crest, original purple and gold colors, black calligraphy, black English lettering, proportions, alignment and every text character. Text verbatim: 香港中文大學 and The Chinese University of Hong Kong. No redesign, no new text, no shadows. Fit the complete horizontal logo neatly within the transparent canvas with a small clear margin."
+}

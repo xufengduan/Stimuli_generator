@@ -2,7 +2,7 @@
 
 **Multi-agent AI for psychological stimulus generation.**
 
-[Open StimMAS](https://huggingface.co/spaces/CUHKLPL/stimuli_generator) · [中文上手指南](#中文上手指南) · [Report an issue](https://github.com/xufengduan/Stimuli_generator/issues)
+[Open StimMAS](https://huggingface.co/spaces/CUHKLPL/stimuli_generator) · [ModelScope 创空间](https://modelscope.cn/studios/modelscopesimon/StimMAS) · [中文上手指南](#中文上手指南) · [Report an issue](https://github.com/xufengduan/Stimuli_generator/issues)
 
 StimMAS helps psychology researchers create experimental materials from a written study design and a few examples. Describe what you need, show the tool what one complete stimulus item looks like, and download the generated items as a CSV file for review.
 
@@ -52,8 +52,10 @@ For the first run, use the free OpenRouter preset, [NVIDIA Nemotron 3.5 Lightnin
 | **Model** | Keep **Predefined Models** selected. |
 | **Model Configuration → Model name** | Select **nvidia/nemotron-3.5-lightning:free (OpenRouter)** from the dropdown. |
 | **API URL** | Filled automatically: `https://openrouter.ai/api/v1/chat/completions` |
-| **Advanced Parameters** | Leave the two default rows: `max_tokens` / `Number` / `2000`; `temperature` / `Number` / `0.7`. |
 | **API Key** | Paste the key you just created **on OpenRouter**. The eye button shows or hides it. |
+| **Advanced Parameters** | Leave the two default rows: `max_tokens` / `Number` / `2000`; `temperature` / `Number` / `0.7`. |
+
+Below **API Key**, **How to get an API key** links the DeepSeek, OpenRouter and OpenAI logos to their key pages. OpenRouter supports 600+ models. The **Common model names and URLs** reference appears only when you select **Custom Model**.
 
 The page initially selects **DeepSeek**. Change the dropdown to the **OpenRouter** option before pasting an OpenRouter key. Use your OpenRouter key for this NVIDIA model; no separate NVIDIA key is needed.
 
@@ -111,24 +113,25 @@ The preview is read-only. Edit the form rows to change it. Remove a row with its
 
 This walkthrough creates English sentences in **active** and **passive** voice. One item contains a verb, a name, and both sentence versions. The goal is to generate **new items following the examples**, rather than run an experiment on participants.
 
-In **Stimulus Design → Example stimuli**:
+In **Stimulus Design → Example stimuli**, each item has two panels:
 
-1. The first item starts with one blank row. Click **Add component** three times to make four rows.
-2. Fill **Item 1** using the table below. Put the label in **Components** and its corresponding text in **Content**.
-3. Click **Add item**, then fill the new **Item 2** with the same component labels. Repeat for **Item 3**.
+- **Condition / Example stimulus**: enter the sentence for each condition. Click **Add condition** for another row.
+- **Avoid duplication → Element / Value (in this item)**: optionally name elements that must be unique across items. Click **Add element** for another row.
 
-| Components — use these labels in every item | Content for Item 1 | Content for Item 2 | Content for Item 3 |
-| --- | --- | --- | --- |
-| `Verb` | eat | read | paint |
-| `Name` | Alice | Ben | Clara |
-| `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
-| `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+For this walkthrough, fill two condition rows and two element rows in each example:
 
-**Avoid repeats:** Put elements that must be unique across stimulus items (e.g., verbs or names) in separate components, and list these components before those that use them.
+| Panel | Field name | Item 1 | Item 2 | Item 3 |
+| --- | --- | --- | --- | --- |
+| Avoid duplication | `Verb` | eat | read | paint |
+| Avoid duplication | `Name` | Alice | Ben | Clara |
+| Condition | `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| Condition | `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
 
-Here, `Verb` and `Name` come before `Active Condition` and `Passive Condition`. The same verb and name should appear in both sentences **within** an item; different items should use different verbs and names. Keep the component labels and their order consistent across all examples. Use distinct labels within each item.
+These are examples for you to enter, not prefilled defaults. The same verb and name appear in both sentences **within** an item; different items should use different verbs and names.
 
-**Add component / Delete component** adds or removes the last component row across all example items. **Add item** creates another complete example with the same number of rows. Fill every cell; delete unwanted rows or items instead of leaving them blank.
+**Each item is edited independently.** Changing names, values, adding/deleting rows, or reordering in Item 1 does not modify Item 2. **Add item** creates a blank example; the copy icon duplicates an existing item so you can edit the copy. Drag row handles, or focus a handle and use the up/down arrow keys, to reorder within an item. Use the trash icons to remove rows or items.
+
+Use consistent field names when examples illustrate the same conditions. Names must be distinct within an item, and a condition cannot share its name with an element. Fill both cells of each condition; unused element rows can be left completely blank or removed. Uniqueness elements are sent before conditions to the Generator but their standalone fields are hidden from Agent Logs. They remain in the CSV so you can check them.
 
 <a id="step-3-design"></a>
 ## Step 3: Describe your stimulus design
@@ -196,7 +199,7 @@ For a first run, leave **Individual Criteria Validation** and **Individual Aspec
 1. Under **Output → The number of items**, enter `5` for a small first run.
 2. Click **Generate stimulus** and keep the page open while it runs.
 3. Follow the progress and the **Generator**, **Validator**, and **Scorer** panels in **Agent Logs**. Rejected proposals may be regenerated before an item is accepted.
-4. When the run finishes, the app initiates a **CSV download**. Check your browser's downloads folder and open the file in Excel, R, SPSS, or another analysis tool.
+4. When the run finishes, the app initiates a **wide CSV download**. In **Output → Generation history**, click a record to download it again, or **Detailed CSV** for validation results and generation diagnostics. Open the files in Excel, R, SPSS, or another analysis tool.
 
 In this example, **5 items means 5 active/passive pairs: 10 sentences in total**, plus each item's Verb and Name components. The supplied examples show the desired format and are not the five new items you requested.
 
@@ -209,22 +212,38 @@ Each item can involve several model calls for generation, validation, scoring, a
 | **Agent Logs filters** | Focus on outputs, warnings/retries, or errors. Use the item selector to inspect a particular item. |
 | **Raw logs** | Shows the underlying log text when you need more detail. |
 
+![Output with wide and detailed CSV history downloads](docs/images/stimmas-output-history.png)
+
 ### What is in the CSV?
 
-Each row is one generated item. Component labels and values are expanded into paired columns. For the four-component example, you would expect `Key1` / `Content1` through `Key4` / `Content4`:
+**The default CSV is a wide table: one complete item per row, with all its condition variants together.** Column order is item ID → uniqueness elements → condition texts → scores → scoring status. Field names become column headers, instead of repeated `Key1 / Content1` pairs. Values are matched by name even if the model returns its JSON fields in a different order.
 
-| Example column | Meaning | Illustrative value |
-| --- | --- | --- |
-| `stimulus_id` | Generated item number. | `1` |
-| `Key1` / `Content1` | First component label and value. | `Verb` / `wash` |
-| `Key2` / `Content2` | Second component label and value. | `Name` / `David` |
-| `Key3` / `Content3` | Third component label and value. | `Active Condition` / `David washes a cup.` |
-| `Key4` / `Content4` | Fourth component label and value. | `Passive Condition` / `A cup is washed by David.` |
-| `Fluency`, `Plausibility` | Model ratings for the aspects you defined. | Numeric values within your configured ranges. |
-| `validation_fails`, `repetition_count` | Diagnostic counts from attempts to obtain the item. | Non-negative integers. |
-| `scoring_error`, when present | A rating could not be obtained or did not meet the expected format. | Inspect the affected item and missing ratings. |
+For the example above:
 
-Missing ratings are not automatically replaced with zero. Review missing values as well as the texts. Download and keep the CSV; the running app is not permanent storage. For reproducibility, also save your design, examples, criteria, rating scales, model ID, parameter settings, and date. Do not include your API key in that record.
+| item_id | Verb | Name | Active Condition | Passive Condition | score_Fluency | score_Plausibility | scoring_status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | wash | David | David washes a cup. | A cup is washed by David. | 8 | 9 | complete |
+
+Scores use the `score_` prefix and retain your aspect names. Genuine zero scores remain zero; unavailable scores are empty cells. `scoring_status` is `complete`, `partial`, `failed`, or `not_requested`, so missing ratings do not get confused with low ratings. If a user-defined field conflicts with an ID, status, score or diagnostic column, export adds a distinguishing prefix/suffix instead of overwriting either value.
+
+**Detailed CSV** contains the same wide table plus:
+
+| Additional column | Meaning |
+| --- | --- |
+| `validation_status`, `validation_<criterion>` | Final validation outcome and each criterion's true/false result. These describe the accepted proposal, not every rejected attempt. |
+| `generation_attempts` | Generator calls attempted for this item, including retries. |
+| `repetition_retries`, `validation_retries` | Repeated or rejected proposals for this item only. |
+| `cumulative_repetition_retries`, `cumulative_validation_retries` | Those counts across the batch up to and including this item. |
+| `scoring_error`, `validation_error` | Information about unavailable scores or validation errors. |
+| `generated_at_utc`, `batch_id` | Batch timestamp in UTC and batch identifier. |
+| `requested_items`, `completed_items` | Requested and saved item counts for the batch. |
+| `stopped_by_user`, `generation_error`, `generation_message` | Stop/error information when relevant. |
+
+Both files use **UTF-8 with BOM** for Chinese text and Excel, with standard CSV quoting for commas, quotation marks and line breaks. Download names look like `StimMAS_2026-11-18_143000_5items.csv`; partial results include `_partial`, and detailed downloads include `_detailed`. Filename dates/times use Hong Kong time; the explicitly named `generated_at_utc` diagnostic uses UTC.
+
+History belongs to the current session URL and survives refreshes/server restarts until the session expires under the 24-hour cleanup policy. **Clear all** resets the form but keeps download history. Keep the session URL to return to it, and save the files locally for longer retention. Older history records are converted to the wide format when downloaded; per-item retry counts that were never recorded are left blank rather than inferred from cumulative counts.
+
+For reproducibility, also save your design, examples, validation criteria, scoring scales, model ID, parameters and date. Do not include your API key in that record. Review and pilot the materials before using them in a study.
 
 <a id="other-models"></a>
 ## Use another model or provider
@@ -306,8 +325,10 @@ For other services, use **Custom Model** with a public HTTP(S), OpenAI-compatibl
 | **Model** | 保持 **Predefined Models**，也就是使用工具已经准备好的模型配置。 |
 | **Model Configuration → Model name** | 在下拉菜单中选择 **nvidia/nemotron-3.5-lightning:free (OpenRouter)**。 |
 | **API URL** | 工具自动填好：`https://openrouter.ai/api/v1/chat/completions`，无需修改。 |
-| **Advanced Parameters** | 先保持默认两行：`max_tokens` / `Number` / `2000`；`temperature` / `Number` / `0.7`。 |
 | **API Key** | 粘贴刚才在 **OpenRouter** 创建的 Key。眼睛按钮可以显示或隐藏它。 |
+| **Advanced Parameters** | 先保持默认两行：`max_tokens` / `Number` / `2000`；`temperature` / `Number` / `0.7`。 |
+
+API Key 下方的 **How to get an API key** 提供 DeepSeek、OpenRouter 和 OpenAI 三个可点击的 logo，直接进入对应平台的 Key 页面。OpenRouter 旁标注支持 600+ 个模型。**Common model names and URLs** 参考表只在选择 **Custom Model** 时显示。
 
 几个容易混淆的词，可以这样理解：
 
@@ -328,20 +349,20 @@ Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次�
 
 下面用“主动句与被动句的理解”实验作为练习。**一个 Item 是一整组材料，包含一个动词、一个人名，以及两个条件的句子。**
 
-在 **Stimulus Design → Example stimuli** 中，先点击三次 **Add component**，把 Item 1 从一行增加到四行，然后填写下表的 Item 1。再点击 **Add item** 创建 Item 2、Item 3，并填写对应内容。
+每个 Item 左侧是 **Condition / Example stimulus**，填写条件名称与对应句子，点击 **Add condition** 增加条件；右侧是 **Avoid duplication → Element / Value (in this item)**，填写不同 Item 之间不能重复的元素及当前示例值，点击 **Add element** 增加元素。
 
-| Components（每个 Item 都用相同的标签） | Item 1 的 Content | Item 2 的 Content | Item 3 的 Content |
-| --- | --- | --- | --- |
-| `Verb` | eat | read | paint |
-| `Name` | Alice | Ben | Clara |
-| `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
-| `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
+| 填写位置 | 名称 | Item 1 | Item 2 | Item 3 |
+| --- | --- | --- | --- | --- |
+| Avoid duplication | `Verb` | eat | read | paint |
+| Avoid duplication | `Name` | Alice | Ben | Clara |
+| Condition | `Active Condition` | Alice eats an apple. | Ben reads the letter. | Clara paints a wall. |
+| Condition | `Passive Condition` | An apple is eaten by Alice. | The letter is read by Ben. | A wall is painted by Clara. |
 
-左侧 **Components** 是每一部分的名称，例如 `Verb`；右侧 **Content** 才是实际内容，例如 `eat`。每个 Item 都有自己的一张表，标签和顺序保持一致，同一张表内的标签不要重名。
+以上内容是填写示例，不是网页默认值。同一 Item 的主被动句共享动词和人名；不同 Item 使用不同的动词和人名。
 
-**避免跨材料重复：** 如果不同 Item 之间的动词、人名不能重复，就像上表这样把它们分别列成独立组件，放在使用它们的句子之前。同一 Item 的主被动句需要共享动词和人名；不同 Item 才需要使用不同的动词和人名。
+**每个 Item 独立编辑**，名称、内容、增删行和排序都不会影响其他 Item。**Add item** 新建空白示例，复制图标复制一整条示例；拖动行把手或聚焦后按上下方向键可以调整当前 Item 的行序，垃圾桶图标用于删除。
 
-**Add component / Delete component** 会同时为所有示例增加/删除最后一行；**Add item** 增加一整条示例。新增的格子需要全部填好，不要留空。
+相同条件建议使用一致的名称；同一 Item 内不能重名，条件与去重元素也不能同名。条件的两格都要填好；不需要的去重行可以整行留空或删除。去重元素会排在条件之前一起发给 Generator，它们的独立字段不会出现在 Agent Logs，但会保留在 CSV 中便于检查。
 
 ### 4. 填写 Stimulus design
 
@@ -398,10 +419,16 @@ Advanced Parameters 也不需要自己写 JSON：`max_tokens = 2000` 是一次�
 
 1. 在 **Output → The number of items** 填 `5`。这表示生成 5 组新材料，也就是本例的 5 对主被动句，共 10 个句子。
 2. 点击 **Generate stimulus**，保持页面打开。下方 **Agent Logs** 可以看到生成、检查、评分和重试的过程。
-3. 完成后网页会发起 CSV 下载，在浏览器的下载文件夹中找到结果，用 Excel、R 或 SPSS 打开。
+3. 完成后网页会自动下载默认宽表 CSV。在 **Output → Generation history** 中点击记录可以再次下载，点击 **Detailed CSV** 下载详细版。用 Excel、R 或 SPSS 打开。
 4. 逐条检查内容与评分，再决定是否扩大生成数量。生成一条材料可能需要多次模型调用，先看小批量结果和平台用量，再运行整套材料。
 
-CSV 中每行是一组 Item。`Key1` 是第一个组件的标签（例如 `Verb`），`Content1` 是对应内容（例如 `wash`）；后面的 `Key2 / Content2` 等以此类推。`Fluency` 等列是你设置的评分维度。评分缺失不会被当作 0 分；出现 `scoring_error` 时，需要检查受影响的材料。更多列的含义见上方 [CSV 说明](#step-5-output)。
+默认 CSV **每行是一整组 Item**，所有条件并排，列顺序为 `item_id → element → condition 内容 → score_评分维度 → scoring_status`。例如 `Verb`、`Name`、`Active Condition`、`Passive Condition` 直接作为列名，不再使用重复的 `Key1 / Content1`。模型返回字段的顺序变化不会导致内容错列。
+
+评分列如 `score_Fluency` 保留真实的 0 分，缺失评分保持空白。`scoring_status` 用 `complete`（完整）、`partial`（部分）、`failed`（全部未取得）或 `not_requested`（未请求评分）标明状态。
+
+**Detailed CSV** 在同一张宽表后增加每条验证标准的结果、当前 Item 的生成尝试/重复/验证重试次数、整批累计次数、评分错误与批次信息。最终验证结果不再叫“失败原因”；它表示最后一条被接收材料的检查结果，不是全部重试日志。旧结果无法还原的每条重试次数保持空白。
+
+两种文件都使用 **UTF-8 BOM**，兼容中文与 Excel，并正确保留逗号、引号和换行。文件名包含香港时间和条数，部分结果加 `_partial`，详细版加 `_detailed`。历史记录属于当前会话 URL，刷新或服务重启后仍可下载，保留到会话按 24 小时策略清理；**Clear all 不会删除历史下载**。请保存会话链接，并把结果文件下载到本地长期保留。完整列说明见上方 [CSV 说明](#step-5-output)。
 
 **Stop** 会请求停止，可能需要等待正在执行的请求结束；如果已有完成的 Item，会保存并下载部分结果。**Clear all** 会重置整个表单并清除 Key，模型也会恢复到 DeepSeek；再次使用 OpenRouter 时要重新选择。
 
@@ -492,6 +519,7 @@ These tests use simulated model responses and do not consume API credits.
 | `static/ui-react.js` | Prebuilt browser bundle. |
 | `stimulus_generator/app.py` | Web server, sessions, API proxy, and CSV downloads. |
 | `stimulus_generator/backend.py` | Generation, validation, scoring, and retries. |
+| `stimulus_generator/csv_export.py` | Wide/detailed CSVs, field alignment, score status, and legacy export conversion. |
 | `stimulus_generator/cli.py`, `run.py` | Local launch commands. |
 | `tests/` | Backend and frontend regression tests. |
 
