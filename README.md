@@ -19,6 +19,7 @@ StimMAS helps psychology researchers create experimental materials from a writte
 - [Use another model or provider](#other-models)
 - [Frequently asked questions](#faq)
 - [中文上手指南](#中文上手指南)
+- [Citation](#citation)
 - [Run locally or develop the app](#local-development)
 
 ## What the three agents do
@@ -522,6 +523,10 @@ These tests use simulated model responses and do not consume API credits.
 | `stimulus_generator/csv_export.py` | Wide/detailed CSVs, field alignment, score status, and legacy export conversion. |
 | `stimulus_generator/cli.py`, `run.py` | Local launch commands. |
 | `tests/` | Backend and frontend regression tests. |
+
+## Citation
+
+Duan, Xufeng, Xiao, Bei, Kan, Beijia, Cai, Zhenguang (2026). **StimMAS: A Multi-Agent Framework for Automated Linguistic Stimulus Construction in Psychological Research.** *Advances in Methods and Practices in Psychological Science.* (in press) [10.31234/osf.io/83zev_v1](https://doi.org/10.31234/osf.io/83zev_v1)
 
 ## Feedback and related tools
 

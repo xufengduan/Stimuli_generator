@@ -4,6 +4,47 @@ function escapeLogHtml(value) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+async function copyCitation() {
+    const button = document.getElementById('copy-citation');
+    const paragraph = document.getElementById('citation-text');
+    const status = document.getElementById('citation-copy-status');
+    const citation = paragraph.textContent.replace(/\s+/g, ' ').trim();
+    clearTimeout(window.citationCopyResetTimer);
+    let copied = false;
+    try {
+        await navigator.clipboard.writeText(citation);
+        copied = true;
+    } catch (_) {
+        // Embedded apps may deny the Clipboard API; retain a user-gesture fallback.
+        const field = document.createElement('textarea');
+        field.value = citation;
+        field.readOnly = true;
+        Object.assign(field.style, {position: 'fixed', left: '-9999px', top: '0'});
+        document.body.appendChild(field);
+        field.select();
+        try { copied = document.execCommand('copy'); } catch (_) {}
+        field.remove();
+        button.focus({preventScroll: true});
+    }
+    button.querySelector('.citation-copy-label').textContent = copied ? 'Copied!' : 'Copy Citation';
+    status.classList.toggle('sr-only', copied);
+    status.textContent = copied ? 'Citation copied to clipboard.' : 'The citation is selected. Press Ctrl+C or Command+C to copy it.';
+    if (copied) {
+        window.citationCopyResetTimer = setTimeout(() => {
+            button.querySelector('.citation-copy-label').textContent = 'Copy Citation';
+            status.textContent = '';
+        }, 2200);
+    } else {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(paragraph);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+}
+
+document.getElementById('copy-citation').addEventListener('click', copyCitation);
+
 // Global variables
 const generateButton = document.getElementById('generate_button');
 const stopButton = document.getElementById('stop_button');
